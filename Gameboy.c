@@ -163,6 +163,65 @@ BYTE ReadMem (struct CPU *cpu, struct Mem *mem, Word Addr){
 
 }
 
+Word PStack (struct CPU *cpu, struct Mem *mem, Word Addr, BYTE Push){
+    //Push 4 Cycles, Pop 3 Cycles
+
+    Word output;
+
+    if(Push){
+
+        cpu->SP--;
+        mem->Data[cpu->SP] = ((Addr & 0xFF00)>>8);
+        cpu->SP--;
+        mem->Data[cpu->SP] = (Addr & 0x00FF);
+        clock+=3;
+
+    } else {
+
+        output = mem->Data[cpu->SP];
+        cpu->SP++;
+        output += (mem->Data[cpu->SP]<<8);
+        cpu->SP++;
+        clock+=2;
+    }
+
+    return output;
+}
+
+Word Add16bit (struct CPU *cpu, Word A, Word B, BYTE WriteZ) {
+    //don't edit Z for add HL, rr
+
+    int sum = A + B;
+   
+    if (WriteZ) {cpu->Z = (sum == 0);}
+    cpu->n = 0;
+
+    A &= 0xFF; B &= 0xFF;
+    cpu->h = ( (A + B) > 0xFF );
+
+    cpu->CY = (sum > 0xFFFF);
+
+    return sum;
+
+}
+
+Word Sub16bit (struct CPU *cpu, Word A, Word B, BYTE WriteZ){
+    //don't edit Z for add HL, rr
+    
+    int diff = A - B;
+    
+    if (WriteZ) {cpu->Z = (diff == 0);}
+
+    cpu->n = 0;
+
+    A &= 0xFF, B &= 0xFF;
+    cpu->h = ((A - B) && 0x100);
+
+    cpu->CY = (diff < 0x0);
+
+    return diff;
+}
+
 BYTE Add8bit (struct CPU *cpu, BYTE A, BYTE B, BYTE carry){
     
 
@@ -198,6 +257,8 @@ BYTE Sub8bit (struct CPU *cpu, BYTE A, BYTE B, BYTE carry){
     return diff;
 }
 
+//8 bit Logic
+//NEED DAA & CPL
 void AND (struct CPU *cpu, struct Mem *mem, BYTE X){
 
     cpu->A &= X;
@@ -238,6 +299,114 @@ void CP (struct CPU *cpu, struct Mem *mem, BYTE X){
     cpu->CY = 0;
 }
 
+void JUMP (struct CPU *cpu, Word Addr){
+
+    cpu->PC = Addr;
+
+}
+
+void CallR (struct CPU *cpu, struct Mem *mem, Word Addr, BYTE call){
+    //Make sure all clocks function properly
+    //call [1: call, 2: reti, 0:...]
+
+        if (call == 1){ //if it's a call 
+
+            cpu->SP--;
+            mem->Data[cpu->SP] = ((cpu->PC & 0xFF00)>>8);
+            cpu->SP--;
+            mem->Data[cpu->SP] = (cpu->PC & 0x00FF);
+            cpu->PC = Addr;
+
+
+        } else {
+            
+            //Actually seperates the parts, because otherwise they would overload and be lost
+            cpu->PC = mem->Data[cpu->SP];
+            cpu->SP++;
+            cpu->PC += ((mem->Data[cpu->SP])<<8);
+            cpu->SP++;
+
+        }
+
+}
+
+BYTE BIT (struct CPU *cpu, struct Mem *mem, BYTE bit, BYTE byte, BYTE OP){
+    //OP(operation): 0 = bit, 1 = set, 2 = res
+    //No need for clocks here
+    // xx b r [r(HL) = 110]
+
+    switch(OP){
+        case 0:
+            BYTE test = (byte & (0x01 << bit)); //Moves over until it reaches the num and ANDs it
+            cpu->Z = (test == 0);
+            cpu->n = 0;
+            cpu->h = 1;
+            break;
+
+        case 1:
+
+            byte |= (0x01 << bit);
+            break;
+
+        case 2:
+            byte &= ~(0x01 << bit);
+            break;
+
+    }
+    return byte;
+
+}
+
+//Rotate and Shift Instructions
+BYTE ROTATE (struct CPU *cpu, BYTE X, BYTE carry, char direct){
+    //direct[0: right, 1: left]
+    //carry[0: none, 1:through carry]
+
+    if(direct){
+        BYTE C = (X & 0x80 || X & 0x80);
+        if(carry) {BYTE temp = C; C = cpu->CY; cpu->CY = temp;} else {cpu->CY = C;} //going through if 1
+        X = (X<<1) + (C);
+    } else {
+        BYTE C = (X & 0x01 || X & 0x01);
+        if(carry) {BYTE temp = C; C = cpu->CY; cpu->CY = temp;} else {cpu->CY = C;} //going through if 1
+        X = (X>>1) + (C<<7);
+    }
+
+    cpu->Z = (X == 0);
+    cpu->n = 0;
+    cpu->h = 0;
+
+    return X;
+    
+}
+
+BYTE SHIFT (struct CPU *cpu, BYTE X, BYTE logical, char direct) {
+    //direct[0: right, 1: left]
+    // logic/arithmetic[0: arithmetic, 1:logical]
+
+    if(direct){ //left
+        BYTE C = ((X & 0x8) && (X & 0x80));
+        cpu->CY = C;
+        X <<= 1;
+
+    } else { //right
+
+        BYTE C = ((X & 0x01) && (X & 0x01));
+        cpu->CY = C;
+
+        if(!logical) {C = (X & 0x08);} else {C = 0;} //changes from 0 if arthmetic
+        X = ((X>>1) + C);
+        
+    }
+
+    cpu->Z = (X == 0);
+    cpu->n = 0;
+    cpu->h = 0;
+    
+    return X;
+
+}
+
 
 int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
 
@@ -252,6 +421,10 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
     //Register Pair dd, or qq [AF]
     //BC: 000, DE: 010, HL: 100, SP: 110 ?AF: 110[qq] -> 111
     Word *ByteRegs[8] = {&cpu->BC, NULL, &cpu->DE, NULL, &cpu->HL, NULL, &cpu->SP, &cpu->AF};
+
+    //cc r1::[True: 011, NZ: 100, Z: 101, NC: 110, C:111]
+    //              3         4        5       6      7
+    
 
     struct Instruction {
 
@@ -281,6 +454,118 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
 
     //A: 7, B: 0, C: 1, D: 2, E: 3, H: 4, L: 5, (HL): 6     [r]
 
+    //JUMP Hardcode
+    //cc r1::[True: 011, NZ: 100, Z: 101, NC: 110, C:111]
+    //check for condition here
+
+    //Single Byte offset JMP
+    switch(instruction.inst){
+        case 0x20: //NZ
+            if(cpu->Z == 1) {cpu->PC++; clock++; return 0;} //move 1 forward to skip the offset
+        case 0x30: //NC
+            if(cpu->CY == 1) {cpu->PC++; clock++; return 0;}
+        case 0x28: //Z
+            if(cpu->Z != 1) {cpu->PC++; clock++; return 0;}
+        case 0x38: //C
+            if(cpu->CY != 1) {cpu->PC++; clock++; return 0;}
+        case 0x18:
+            signed char offset = ReadPC(C, M);
+            clock++;
+            JUMP(C, cpu->PC + offset);
+            return 0;
+
+    }
+
+    //Word Address JMP
+    switch(instruction.inst){
+        case 0xC2: //NZ
+            if(cpu->Z == 1) {cpu->PC+=2; clock++; return 0;} //move 1 forward to skip the offset
+        case 0xD2: //NC
+            if(cpu->CY == 1) {cpu->PC+=2; clock++; return 0;}
+        case 0xCA: //Z
+            if(cpu->Z != 1) {cpu->PC+=2; clock++; return 0;}
+        case 0xDA: //C
+            if(cpu->CY != 1) {cpu->PC+=2; clock++; return 0;}
+        case 0xE9: //(HL)
+            JUMP(C, cpu->HL); 
+        case 0xC3:
+            BYTE lowAddr = ReadPC(C, M);
+            BYTE HighAddr = ReadPC(C, M);
+            clock++;
+            JUMP(C, (HighAddr<<4) + lowAddr);
+            return 0;
+        
+        
+
+    }
+
+    //CAll and RE**
+    switch(instruction.inst){
+        case 0xC4: //NZ
+            if(cpu->Z == 1) {cpu->PC+=2; clock++; return 0;} //move 1 forward to skip the offset
+        case 0xD4: //NC
+            if(cpu->CY == 1) {cpu->PC+=2; clock++; return 0;}
+        case 0xCC: //Z
+            if(cpu->Z != 1) {cpu->PC+=2; clock++; return 0;}
+        case 0xDC: //C
+            if(cpu->CY != 1) {cpu->PC+=2; clock++; return 0;}
+        case 0xCD: //Always true
+
+            BYTE lowAddr = ReadPC(C, M);
+            BYTE HighAddr = ReadPC(C, M);
+            clock+=3; // 24/12
+            CallR(C, M, (HighAddr<<4) + lowAddr, 1);
+            return 0;
+        
+        //RET
+        case 0xC0: //NZ
+            if(cpu->Z == 1) {clock++; return 0;} //move 1 forward to skip the offset
+        case 0xD0: //NC
+            if(cpu->CY == 1) {clock++; return 0;}
+        case 0xC8: //Z
+            if(cpu->Z != 1) {clock++; return 0;}
+        case 0xD8: //C
+            if(cpu->CY != 1) {clock++; return 0;}
+        case 0xD9:
+            //INTERRUPT FLAG IEM
+        case 0xC9:
+            CallR(C, M, 0, 0);
+            clock+=3;
+            return 0;
+
+        //RST Cases
+        case 0xC7:
+        case 0xD7:
+        case 0xE7:
+        case 0xF7:
+        case 0xCF:
+        case 0xDF:
+        case 0xEF:
+        case 0xFF:
+            BYTE RSTAddr[8] = {0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38}; //Goes straight to these positions
+            CallR (C, M, RSTAddr[instruction.r1], 1);
+            clock+=3;
+            return 0;
+
+    }
+
+    //PUSH & POP
+    switch (instruction.low){
+        case 0x01:
+            if (instruction.high > 0xB) {
+                //BC: 000, DE: 010, HL: 100, SP: 110 ?AF: 110[qq] -> 111
+                if (instruction.r1 == 0x110) {cpu->AF = PStack(C, M, 0, 0); return 0;} //PSTACK handles clocks
+                *ByteRegs[instruction.r1] = PStack(C, M, 0, 0);
+            }
+        case 0x05:
+            if (instruction.high > 0xB) {
+                //BC: 000, DE: 010, HL: 100, SP: 110 ?AF: 110[qq] -> 111
+                if (instruction.r1 == 0x110) {PStack(C, M, cpu->AF, 1); return 0;} //PSTACK handles clocks
+                PStack(C, M, *ByteRegs[instruction.r1], 1);
+            }
+    }
+
+
     //Control things
     switch (instruction.inst){
         case 0x00:
@@ -293,7 +578,7 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
         case 0x76:
             //Halt
             return 2;
-        case 0xC8:
+        case 0xCB:
             //Prefix CB
             return 3;
         case 0xF3:
@@ -301,8 +586,7 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
             return 4;
         case 0xFB:
             //EI
-            return 5;
-
+            return 5;   
 
     }
 
@@ -396,25 +680,12 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
 
     
         //Second, columns
-        switch (instruction.low){
-            
-            case 0x0:
-                if (instruction.high < 0x4){
-                    //JR
+        default:
                     
                     
-                }
-
-        }
-
     }
-
     
-
 }
-
-
-
 
 int main(void){
 
@@ -427,6 +698,8 @@ int main(void){
     // LoadRom ( Rom , &mem);
     mem.Data[0] = 0x00A0;
     mem.Data[1] = 0x0088;
+    cpu.SP = 0xFFFE;
+
     cpu.A = 0x03;
     cpu.B = 0x04;
     
@@ -436,7 +709,7 @@ int main(void){
         ExecInstruction ( &cpu, &mem);
         DisplayReg (&cpu );
         
-        
+        //user deactivated loop
         printf("Continue? [y/n]: ");
         scanf(" %c", &input);
     }
@@ -446,4 +719,4 @@ int main(void){
     
    
     
-
+//
