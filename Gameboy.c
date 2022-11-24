@@ -77,6 +77,26 @@ struct Mem {
     
 };
 
+struct Instruction {
+
+        union {
+
+            BYTE inst;
+            struct {
+                BYTE low : 4;
+                BYTE high : 4;
+            };
+            struct {
+                BYTE r2 : 3;
+                BYTE r1 : 3;
+                BYTE : 2;
+            };
+
+            
+        };
+        
+
+    };
 
 //Catrige Header Mem Addrs
 Word entryPoint[2] = {0x0100, 0x0103};
@@ -335,6 +355,7 @@ BYTE BIT (struct CPU *cpu, struct Mem *mem, BYTE bit, BYTE byte, BYTE OP){
     //No need for clocks here
     // xx b r [r(HL) = 110]
 
+    //sending pointer
     switch(OP){
         case 0:
             BYTE test = (byte & (0x01 << bit)); //Moves over until it reaches the num and ANDs it
@@ -358,7 +379,7 @@ BYTE BIT (struct CPU *cpu, struct Mem *mem, BYTE bit, BYTE byte, BYTE OP){
 }
 
 //Rotate and Shift Instructions
-BYTE ROTATE (struct CPU *cpu, BYTE X, BYTE carry, char direct){
+BYTE ROTATE (struct CPU *cpu, BYTE X, BYTE carry, BYTE direct){
     //direct[0: right, 1: left]
     //carry[0: none, 1:through carry]
 
@@ -407,7 +428,6 @@ BYTE SHIFT (struct CPU *cpu, BYTE X, BYTE logical, char direct) {
 
 }
 
-
 int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
 
     struct CPU *C = cpu;
@@ -426,26 +446,7 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
     //              3         4        5       6      7
     
 
-    struct Instruction {
-
-        union {
-
-            BYTE inst;
-            struct {
-                BYTE low : 4;
-                BYTE high : 4;
-            };
-            struct {
-                BYTE r2 : 3;
-                BYTE r1 : 3;
-                BYTE : 2;
-            };
-
-            
-        };
-        
-
-    }instruction;
+    struct Instruction instruction;
 
     instruction.inst = ReadPC (C, M);
     printf("Byte is 0X%X, the low: 0x%X, the high: 0x%X, the r2: %X, the r1: %X \n", instruction.inst, instruction.low, instruction.high, instruction.r2, instruction.r1);
@@ -565,6 +566,290 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
             }
     }
 
+    //BC: 000, DE: 010, HL: 100, SP: 110 r1
+        // B: 000, D: 010, H:100, (HL): 110 r1
+        // C: 001, E: 011, L: 101, A:111 
+        Word *topRowRegs[7] = {&cpu->BC, NULL, &cpu->DE, NULL, &cpu->HL, NULL, &cpu->SP};
+        BYTE *topRowRegsHigh[6] = {&cpu->B, NULL, &cpu->D, NULL, &cpu->H, NULL}; //(HL) should be at end
+        BYTE *topRowRegsHigh2[8] = {NULL, &cpu->C, NULL, &cpu->E, NULL, &cpu->L, NULL, &cpu->A};
+    //16bit+ LD
+
+    switch (instruction.inst){
+        //r2 [100: (a8),  (a16) and also 100:(C) 110: A, ]
+        case 0xE0: //LD (FF00 + )
+            BYTE n_offset = ReadPC(C, M);
+            mem->Data[0xFF00 + n_offset] = cpu->A;
+            clock++;
+            return 0;
+        case 0xF0:
+            n_offset = ReadPC(C, M);
+            cpu->A =  mem->Data[0xFF00 + n_offset];
+            clock++;
+            return 0;
+        
+        case 0xE2: //LD (C) A
+            mem->Data[0xFF00 + cpu->C] = cpu->A; 
+            clock++;
+            return 0;
+            
+        case 0xF2:
+            cpu->A = mem->Data[0xFF00 + cpu->C];
+            clock++;
+            return 0;
+
+        case 0xEA: //LD (a16) , A
+            Word a16_addr = ReadPC(C, M) + (ReadPC(C, M) << 8);
+            mem->Data[a16_addr] = cpu->A;
+            clock++;
+            return 0;
+        case 0xFA:
+            a16_addr = ReadPC(C, M) + (ReadPC(C, M) << 8);
+            cpu->A = mem->Data[a16_addr];
+            clock++;
+            return 0; 
+
+        case 0xF8: //LD HL, SP+r8
+            n_offset = ReadPC(C, M);
+            cpu->HL = cpu->SP + n_offset;
+            clock++;
+            return 0;
+
+        case 0xF9:
+            cpu->SP = cpu->HL;
+            clock++;
+            return 0;
+        
+        case 0x08: //LD (a16), SP
+            a16_addr = ReadPC(C, M) + (ReadPC(C, M) << 8);
+            mem->Data[a16_addr] = cpu->SP;
+            clock += 2;
+            return 0;
+
+        case 0x01:
+        case 0x11:
+        case 0x21:
+        case 0x31:
+
+            Word d16 = ReadPC(C, M) + (ReadPC(C, M) << 8);
+            *topRowRegs[instruction.r1] = d16;
+            return 0;
+
+        case 0x02:
+        case 0x12:
+
+            mem->Data[*topRowRegs[instruction.r1]] = cpu->A;    
+            clock++;
+            return 0;
+
+        case 0x22:
+            
+            mem->Data[cpu->HL] = cpu->A;
+            cpu->HL++;
+            clock++;
+            return 0;
+
+        case 0x32: //LD (HL-), A
+
+            mem->Data[cpu->HL] = cpu->A;
+            cpu->HL--;
+            clock++;
+            return 0;
+        
+        case 0x06:
+        case 0x16:
+        case 0x26:
+        case 0x36:
+
+            BYTE d8 = ReadPC(C, M);
+            if(instruction.r1 == 0x110) {mem->Data[cpu->HL] = d8; clock++; return 0;}
+            *topRowRegsHigh[instruction.r1] = d8;
+            return 0;
+        
+        case 0x0A: //LD A, (BC)
+
+            cpu->A = mem->Data[cpu->BC];   
+            clock++;
+            return 0;
+
+        case 0x1A:
+
+            cpu->A = mem->Data[cpu->DE];   
+            clock++;
+            return 0;
+
+        case 0x2A:
+            
+            cpu->A = mem->Data[cpu->HL];
+            cpu->HL++;
+            clock++;
+            return 0;
+
+        case 0x3A: //LD A, (HL-)
+
+            cpu->A = mem->Data[cpu->HL];
+            cpu->HL--;
+            clock++;
+            return 0;
+        
+        case 0x0E:
+        case 0x1E:
+        case 0x2E:
+        case 0x3E:
+            d8 = ReadPC(C, M);
+            *topRowRegsHigh2[instruction.r1] = d8;
+            return 0;
+
+    }
+
+    //Arithmetic/Logic instructions top ROW
+    switch(instruction.inst){
+
+        case 0x03:
+        case 0x13:
+        case 0x23:
+        case 0x33: //INC 16 bit registers
+
+        *topRowRegs[instruction.r1]++;
+        clock++;
+        return 0;
+
+        case 0x04:
+        case 0x14:
+        case 0x24:
+        case 0x34: //INC B, and (HL)
+
+            if (instruction.r1 == 0x110) {mem->Data[cpu->HL] = Add8bit(C, mem->Data[cpu->HL], 1, 0); clock+= 2; return 0;}
+            *topRowRegsHigh[instruction.r1] = Add8bit(C, *topRowRegsHigh[instruction.r1], 1, 0);
+            return 0;
+
+        case 0x05:
+        case 0x15:
+        case 0x25:
+        case 0x35: //DEC B, and (HL)
+
+            if (instruction.r1 == 0x110) {mem->Data[cpu->HL] = Sub8bit(C, mem->Data[cpu->HL], 1, 0); clock+= 2; return 0;}
+            *topRowRegsHigh[instruction.r1] = Sub8bit(C, *topRowRegsHigh[instruction.r1], 1, 0);
+            return 0;
+        
+        //d8 arithmetic 
+        case 0xC6:
+
+            BYTE d8 = ReadPC(C, M);
+            cpu->A = Add8bit(C, cpu->A, d8, 0);
+            return 0;
+
+        case 0xD6:
+
+            d8 = ReadPC(C, M);
+            cpu->A = Sub8bit(C, cpu->A, d8, 0);
+            return 0;
+
+        case 0xE6:
+
+            d8 = ReadPC(C, M);
+            AND(C, M, d8);
+            return 0;
+
+        case 0xF6:
+
+            d8 = ReadPC(C, M);
+            OR(C, M, d8);
+            return 0;
+        
+
+         //More arithmetic ADC, SBC, XOR, CP
+        case 0xCE:
+
+            d8 = ReadPC(C, M);
+            cpu->A = Add8bit(C, cpu->A, d8, 1);
+            return 0;
+
+        case 0xDE:
+
+            d8 = ReadPC(C, M);
+            cpu->A = Sub8bit(C, cpu->A, d8, 1);
+            return 0;
+
+        case 0xEE:
+
+            d8 = ReadPC(C, M);
+            XOR(C, M, d8);
+            return 0;
+
+        case 0xFE:
+
+            d8 = ReadPC(C, M);
+            CP(C, M, d8);
+            return 0;
+
+        //16 bit Arithmetic
+        case 0xE8: //ADD SP, r8
+
+            signed short r8 = ReadPC(C, M);
+            if (r8>0x00) {
+                cpu->SP = Add16bit(C, cpu->SP, r8, 0);
+                cpu->Z = 0;
+                clock += 2;
+                return 0;
+            }
+            //if negative
+            r8 = ~(r8) + 1;
+            cpu->SP = Sub16bit(C, cpu->SP, r8, 0);
+            cpu->Z = 0;
+            clock += 2;
+            return 0;
+        
+        case 0x09:
+        case 0x19:
+        case 0x29:
+        case 0x39: //AD 16-bit registers
+
+            cpu->HL = Add16bit(C, cpu->HL, *topRowRegs[instruction.r1-1], 0);
+            clock++;
+            return 0;
+
+        case 0x0B:
+        case 0x1B:
+        case 0x2B:
+        case 0x3B: //DEC 16 bit 
+            
+            *topRowRegs[instruction.r1-1]--;
+            clock++;
+            return 0;
+
+        case 0x0C:
+        case 0x1C:
+        case 0x2C:
+        case 0x3C: //INC 8 bit regs
+
+            *topRowRegsHigh2[instruction.r1] = Add8bit(C, *topRowRegsHigh2[instruction.r1], 1, 0);
+            return 0;
+
+        case 0x0D:
+        case 0x1D:
+        case 0x2D:
+        case 0x3D: //DEC 8 bit regs
+
+            *topRowRegsHigh2[instruction.r1] = Sub8bit(C, *topRowRegsHigh2[instruction.r1], 1, 0);
+            return 0;
+
+        case 0x7: //ROTATIONS
+            cpu->A = ROTATE(C, cpu->A, 0, 1);
+            return 0;
+
+        case 0x17:
+            cpu->A = ROTATE(C, cpu->A, 1, 1);
+            return 0;
+
+        case 0x27:
+            cpu->A = ROTATE(C, cpu->A, 0, 0);
+            return 0;
+
+        case 0x37:
+            cpu->A = ROTATE(C, cpu->A, 1, 0);
+            return 0;
+
+    }
 
     //Control things
     switch (instruction.inst){
@@ -579,7 +864,91 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
             //Halt
             return 2;
         case 0xCB:
-            //Prefix CB
+
+            struct Instruction CB;
+            CB.inst = ReadPC(C, M);
+            BYTE direction;
+            if(CB.low < 0x08) {direction = 1;} else {direction = 0;}
+
+            BYTE Bitnum;
+            if (CB.high > 0x3 && CB.high < 0x8) {
+                Bitnum = (CB.inst-0x4)/8;
+                
+            } else if (CB.high > 0x7 && CB.high < 0xC){
+                Bitnum = (CB.inst-0x8)/8;
+            } else if (CB.high > 0xB){
+                Bitnum = (CB.inst-0xC)/8;
+            }
+            // CB PREFIX SWITCH STATEMENT
+
+            switch(CB.high){
+                
+                case 0x0: //RLC, RRC
+                    if(CB.r2 == 0x06) { mem->Data[cpu->HL] = ROTATE(C, mem->Data[cpu->HL], 0, direction); clock += 2; return 0;}    
+                    *BitRegs[CB.r2] = ROTATE(C, *BitRegs[CB.r2], 0, direction);
+                    return 0;
+
+                case 0x1: //wrap THROUGH CY
+                    if(CB.r2 == 0x06) { mem->Data[cpu->HL] = ROTATE(C, mem->Data[cpu->HL], 1, direction); clock += 2; return 0;}    
+                    *BitRegs[CB.r2] = ROTATE(C, *BitRegs[CB.r2], 1, direction);
+                    return 0;
+
+                case 0x2: //SLA SRA
+                    if(CB.r2 == 0x06) { mem->Data[cpu->HL] = SHIFT(C, mem->Data[cpu->HL], 0, direction); clock += 2; return 0;}
+                    *BitRegs[CB.r2] = SHIFT(C, *BitRegs[CB.r2], 0, direction);
+                    return 0;
+
+                case 0x3: //SWAP, SRL
+
+                    if(CB.low < 0x08){ //SWAP
+                        if (CB.r2 == 0x06) {
+                            struct Instruction memHL;
+                            memHL.inst = mem->Data[cpu->HL];
+                            mem->Data[cpu->HL] = (memHL.low<<4) + (memHL.high); //SWAP
+                            return 0;
+                        }
+
+                        struct Instruction RegSwap;
+                        RegSwap.inst = *BitRegs[CB.r2];
+                        *BitRegs[CB.r2] = ((RegSwap.low<<4) + (RegSwap.high));
+                        return 0;
+
+                    }
+
+                    if (CB.r2 == 0x06) {mem->Data[cpu->HL] = SHIFT(C, mem->Data[cpu->HL], 1, 0); clock += 2; return 0;}
+                    *BitRegs[CB.r2] = SHIFT(C, *BitRegs[CB.r2], 1, 0);
+                    return 0;
+                
+                case 0x4:
+                case 0x5:
+                case 0x6:
+                case 0x7: //BIT
+                    if (CB.r2 == 0x06) {BIT(C, M, Bitnum, mem->Data[cpu->HL], 0); clock += 2; return 0;}
+                    BIT(C, M, Bitnum, *BitRegs[CB.r2], 0);\
+                    return 0;
+                
+                case 0x8:
+                case 0x9:
+                case 0xA:
+                case 0xB: //RES
+                    if (CB.r2 == 0x06) {mem->Data[cpu->HL] = BIT(C, M, Bitnum, mem->Data[cpu->HL], 2); clock += 2; return 0;}
+                    *BitRegs[CB.r2] = BIT(C, M, Bitnum, *BitRegs[CB.r2], 2);
+                    return 0;
+
+                case 0xC:
+                case 0xD:
+                case 0xE:
+                case 0xF: //SET
+                    if (CB.r2 == 0x06) {mem->Data[cpu->HL] = BIT(C, M, Bitnum, mem->Data[cpu->HL], 1); clock += 2; return 0;}
+                    *BitRegs[CB.r2] = BIT(C, M, Bitnum, *BitRegs[CB.r2], 1);
+                    return 0;
+
+            }
+            
+
+
+            //Not hard to implement
+            
             return 3;
         case 0xF3:
             //DI
@@ -588,6 +957,32 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
             //EI
             return 5;   
 
+    }
+
+
+    // THE LAST FEW DAA
+    switch(instruction.inst) {
+        case 0x27:
+            //DAA
+        case 0x37:
+            //SCF
+            cpu->CY = 1;
+            cpu->n = 0;
+            cpu->h = 0;
+            return 0;
+        case 0x2F:
+            //CPL
+            cpu->A ^= 0xFF;
+            cpu->n = 1;
+            cpu->h = 1;
+            return 0;
+
+        case 0x3F:
+            //CCF
+            cpu->CY ^= 1;
+            cpu->n = 0;
+            cpu->h = 0;
+            return 0;
     }
 
     //INSTRUCTION SET
