@@ -2,12 +2,12 @@
 //taken from CINOOP, good organization
 
 #define FLAG_ZERO (0x08)
-#define FLAG_SUB (0x40)
+#define FLAG_N (0x40)
 #define FLAG_HALF (0x20)
 #define FLAG_CARRY (0x10)
 
 #define FLAG_ISZERO (registers.F & 0x80)
-#define FLAG_ISSUB (registers.F & 0x40)
+#define FLAG_ISN (registers.F & 0x40)
 #define FLAG_ISHALF (registers.F & 0x20)
 #define FLAG_ISCARRY (registers.F & 0x10) //if & and successful, produces non-zero value -> True
 
@@ -119,18 +119,74 @@ struct Instruction {
     signed char cycles;
     
 
-}extern const instructions[256];
+}extern const instructions[257];
 
 //Functions
 
 void nop(void);
+void HALT (void);
+void STOP (void);
+
 void loadRegB(unsigned char Opcode); //for registers and (HL)
 void loadRegS(unsigned char Opcode); //load reg short
 void load8bit(unsigned char Opcode, unsigned char operand); //load byte to Register
+
 void load16bit(unsigned char Opcode, unsigned short operand);
 void store8bit(unsigned short Address, unsigned char value);
 void writeStack(unsigned short value);
+
 void INCRegS(unsigned char Opcode);
 void INCRegB(unsigned char Opcode);
+
 void ADDC (unsigned char *destination, unsigned char val, unsigned char carry); //for use in other things
+void DECRegB (unsigned char Opcode);
+void DECRegS (unsigned char Opcode);
+void SUBC (unsigned char *destination, unsigned char val, unsigned char carry);
+void ADDHL(unsigned char Opcode);
+void ADDCS (unsigned short *destination, unsigned short val, unsigned char carry);
+
+
+void RR (unsigned char Opcode);
+void ROTATE (unsigned char *object, unsigned char carry, unsigned char direct);
+
+void JUMP8 (unsigned char Opcode, signed char offset);
+void JUMP16 (unsigned char Opcode, unsigned short Address);
+void CALL (unsigned char Opcode, unsigned short Address);
+void JUMPHL (void);
+
+void CPL (void);
+void SCF (void);
+void CCF (void);
+void DAA (void);
+
+void ADD (unsigned char Opcode);
+void ADD8 (unsigned char Opcode, unsigned char operand);
+void SUB (unsigned char Opcode);
+
+void AND (unsigned char Opcode);
+void XOR (unsigned char Opcode);
+void OR (unsigned char Opcode);
+void CP (unsigned char Opcode);
+
+void RET (unsigned char Opcode);
+
+void RETI (unsigned char Opcode);
+void DI (void);
+void EI (void);
+
+void RST (unsigned char Opcode);
+void POP (unsigned char Opcode);
+void PUSH (unsigned char Opcode);
+
+void CB (unsigned char Opcode, unsigned char operand);
+unsigned char SHIFT (unsigned char X, unsigned char logical, unsigned char direct);
+unsigned char BIT (unsigned char bit, unsigned char byte, unsigned char OP);
+
+void SUB8 (unsigned char Opcode, unsigned char operand);
+void AND8 (unsigned char Opcode, unsigned char operand);
+void XOR8 (unsigned char Opcode, unsigned char operand);
+void OR8 (unsigned char Opcode, unsigned char operand);
+void CP8 (unsigned char Opcode, unsigned char operand);
+
+void ADDSP (unsigned char Opcode, signed char operand);
 

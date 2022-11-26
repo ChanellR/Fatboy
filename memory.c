@@ -33,6 +33,8 @@ void WriteStack (unsigned short value) {
 }
 
 unsigned short ReadStack (void) {
-    ReadShort(registers.SP);
+    unsigned short output = ReadShort(registers.SP);
+    registers.SP += 2;
+    return output;
 }
 
