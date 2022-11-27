@@ -2,25 +2,41 @@
 
 #include "header.h"
 #include "memory.h"
+#include "control.h"
+#include "display.h"
+
 
 struct timer timer;
 struct interrupt interrupt;
 struct registers registers;
 unsigned char stopped;
 
+char Filename[] = "Red.gb";
+
+void LoadRom (void){
+
+    FILE *f;
+    f = fopen(Filename, "r");
+    //Reads all x8000 bytes of Rom data
+    fread(memory, 0x8000, 1, f);
+
+    printf("Completed Loading Rom \n");
+    fclose(f);
+}
+
 
 void Reset (void) {
 
     registers.A = 0x01;
-	registers.F = 0xb0; //If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
+	registers.F = 0x00; //If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
 	registers.B = 0x00;
-	registers.C = 0x13;
+	registers.C = 0x14;
 	registers.D = 0x00;
-	registers.E = 0xd8;
-	registers.H = 0x01;
-	registers.L = 0x4d;
+	registers.E = 0x00;
+	registers.H = 0xC0;
+	registers.L = 0x60;
 	registers.SP = 0xfffe;
-	registers.PC = 0x100;
+	registers.PC = 0x101;
 	
 	interrupt.master = 1;
 	interrupt.enable = 0;
@@ -28,7 +44,8 @@ void Reset (void) {
 
 }
 
-const struct Instruction instructions[257] = {
+const struct Instruction instructions[256] = {
+
 
     //-3: word LD, -2: byte LD, -1: register specific, 0: none, 1:byte, 2: word
 
@@ -184,7 +201,6 @@ const struct Instruction instructions[257] = {
     {-1, ADD, 1}, //0x0D
     {-1, ADD, 1}, //0x0E
     {-1, ADD, 1}, //0x0F
-    {-1, ADD, 1}, //0x0G
 
     {-1, SUB, 1}, //0x00
     {-1, SUB, 1}, //0x01
@@ -308,14 +324,31 @@ const struct Instruction instructions[257] = {
     {0, EI, 1},
     {0, nop, 1},
     {0, nop, 1},
-    {0, CP8, 2},
+    {-2, CP8, 2},
     {-1, RST, 4}
     
 };
 
 
-int main (void) {
-    //the asterisk is an empty function constructor, which calls the pointer function from instructions i suppose
+void Update () { //gpu step
+
+    const int MAXCYCLES = 69905;
+
+    int currentcycles = 0;
+    while (currentcycles < MAXCYCLES) {
+
+        int cycles = CpuStep ();
+        currentcycles += cycles;
+
+        CheckInterrupts();
+
+    }
+
+    //Render ();
+}
+
+
+int CpuStep (void) {
 
     unsigned char instruction = ReadByte(registers.PC++);
 
@@ -339,16 +372,65 @@ int main (void) {
 
     }
 
-    //Handle timing 
-    registers.HL = 0;
-    registers.B = 4;
-
-    // ((void (*)(unsigned char))instructions[2].function)(0x70);
-    printf("%i", instructions[256].operand_length);
+    return instructions[instruction].cycles;
 
 }
 
 
+
+void CheckInterrupts (void) {
+        
+    //halt and stop
+
+    if ((interrupt.flag) && (interrupt.master))
+    {
+        HandleInterrupt();
+    }
+
+}
+
+int main (void) {
+
+    Reset(); //init
+    LoadRom();
+
+    char input = 6;
+    while (input == 6){
+        input = realtimeDebug();
+    }
+   
+}
+
+void HandleInterrupt (void) {
+
+    unsigned short InterruptAddress[5] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
+
+    unsigned char priority;
+    unsigned char currentFlag;
+
+    if (interrupt.FVBlank) {
+        currentFlag = 0x01;
+        priority = 1;
+    } else if (interrupt.FLCD) {
+        currentFlag = 0x02;
+        priority = 2;
+    } else if (interrupt.FTimer) {
+        currentFlag = 0x04;
+        priority = 3;
+    } else if (interrupt.FSerial) {
+        currentFlag = 0x08;
+        priority = 4;
+    } else {
+        currentFlag = 0x10;
+        priority = 5;
+    }
+
+    if(interrupt.enable & currentFlag) {
+        interrupt.master = 0;
+        CALL(0x00, InterruptAddress[priority]);
+    }//interrupt call
+    
+}
 
 
 
@@ -362,13 +444,13 @@ unsigned char *topRowRegsHigh2[8] = {NULL, &registers.C, NULL, &registers.E, NUL
 void nop(void) {}
 
 void STOP(void) {
-    stopped = 0;
+    stopped = 1;
     //Reset, start at 0000h
     //input, start after instruction
 }
 
 void HALT (void) {
-    stopped = 1;
+    stopped = 2;
     //Halted
 }
 
@@ -412,7 +494,7 @@ void DI (void) {
 }
 
 void EI (void) {
-    interrupt.master = 0;
+    interrupt.master = 1;
 }
 
 void AND (unsigned char Opcode) {
@@ -431,14 +513,14 @@ void AND (unsigned char Opcode) {
 
 void XOR (unsigned char Opcode) {
 
-    if(Opcode == 0xAF) {FLAG_SET(FLAG_ZERO);} return;
-
     unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
     struct opcode xor;
     xor.inst = Opcode;
     registers.A ^= *BitRegs[xor.r2];
 
-    FLAG_SET((registers.A && registers.A) * 0x80); //Z
+    printf("%04x", xor.r1);
+    CreateBox("after XOR");
+    FLAG_SET((registers.A == 0) * 0x80); //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
@@ -452,7 +534,7 @@ void OR (unsigned char Opcode) {
     or.inst = Opcode;
     registers.A |= *BitRegs[or.r2];
 
-    FLAG_SET((registers.A && registers.A) * 0x80); //Z
+    FLAG_SET((registers.A == 0) * 0x80); //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
@@ -463,18 +545,19 @@ void CP (unsigned char Opcode) { //CP
     unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
     struct opcode xor;
     xor.inst = Opcode;
-    registers.A = (registers.A == *BitRegs[xor.r2]);
 
+    unsigned char A = registers.A;
+    SUBC(&A, *BitRegs[xor.r2], 0); //uses sub flags
 
-    FLAG_SET((registers.A && registers.A) * 0x80); //Z
-    FLAG_SET(FLAG_N);
-    FLAG_CLEAR(FLAG_HALF);
-    FLAG_CLEAR(FLAG_CARRY); //LOOK
+    // FLAG_SET((registers.A && registers.A) * 0x80); //Z
+    // FLAG_SET(FLAG_N);
+    // FLAG_CLEAR(FLAG_HALF);
+    // FLAG_CLEAR(FLAG_CARRY); //LOOK
 
-    if (Opcode == 0xBF) {
-        FLAG_SET(FLAG_ZERO);
-        FLAG_SET(FLAG_N);
-    }
+    // if (Opcode == 0xBF) {
+    //     FLAG_SET(FLAG_ZERO);
+    //     FLAG_SET(FLAG_N);
+    // }
 }
 
 void SUB8 (unsigned char Opcode, unsigned char operand) {
@@ -491,7 +574,7 @@ void AND8 (unsigned char Opcode, unsigned char operand) {
 
     registers.A &= operand;
 
-    FLAG_SET((registers.A && registers.A) * 0x80); //Z
+    FLAG_SET((registers.A == 0) * 0x80); //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_SET(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
@@ -502,7 +585,7 @@ void XOR8 (unsigned char Opcode, unsigned char operand) {
 
     registers.A ^= operand;
 
-    FLAG_SET((registers.A && registers.A) * 0x80); //Z
+    FLAG_SET((registers.A == 0) * 0x80); //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
@@ -512,7 +595,7 @@ void OR8 (unsigned char Opcode, unsigned char operand) {
 
     registers.A |= operand;
 
-    FLAG_SET((registers.A && registers.A) * 0x80); //Z
+    FLAG_SET((registers.A == 0) * 0x80); //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
@@ -521,13 +604,9 @@ void OR8 (unsigned char Opcode, unsigned char operand) {
 
 void CP8 (unsigned char Opcode, unsigned char operand) {
 
-    registers.A = (registers.A == operand);
+    unsigned char A = registers.A;
+    SUBC(&A, operand, 0); //uses sub flags
 
-
-    FLAG_SET((registers.A && registers.A) * 0x80); //Z
-    FLAG_SET(FLAG_N);
-    FLAG_CLEAR(FLAG_HALF);
-    FLAG_CLEAR(FLAG_CARRY); //LOOK
 
 }
 
@@ -937,8 +1016,8 @@ void JUMP8 (unsigned char Opcode, signed char offset) {
     //C
     if(Opcode == 0x38 && !FLAG_ISSET(FLAG_ZERO)) {return;}
 
-    registers.PC--;
     registers.PC += offset; 
+    CreateBox("After JMP8");
         
     
 }

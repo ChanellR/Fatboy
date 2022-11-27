@@ -76,19 +76,6 @@ struct registers {
 
 extern unsigned char memory[0xFFFF];
 
-struct interrupt {
-    unsigned char master;
-    unsigned char enable; //0xFFFF
-    unsigned char flag; //0xFF0F
-}extern interrupt;
-
-
-struct timer {
-    unsigned char DIV; // 0xFF04 always incrementing, rest on write
-    unsigned char TIMA; // 0xFF05 resets to TMA on oveflow
-    unsigned char TMA; // 0xFF06 timer modulo
-    unsigned char TAC; // 0xFF07 timer control
-}extern timer;
 
 //struct renderer
 
@@ -119,7 +106,7 @@ struct Instruction {
     signed char cycles;
     
 
-}extern const instructions[257];
+}extern const instructions[256];
 
 //Functions
 
@@ -190,3 +177,12 @@ void CP8 (unsigned char Opcode, unsigned char operand);
 
 void ADDSP (unsigned char Opcode, signed char operand);
 
+void HandleInterrupt (void);
+void GetInput (int *wakeupcaller);
+
+int CpuStep (void);
+void CheckInterrupts(void);
+
+
+
+int realtimeDebug(void);
