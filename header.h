@@ -1,7 +1,7 @@
 #pragma once
 //taken from CINOOP, good organization
 
-#define FLAG_ZERO (0x08)
+#define FLAG_ZERO (0x80)
 #define FLAG_N (0x40)
 #define FLAG_HALF (0x20)
 #define FLAG_CARRY (0x10)
@@ -13,7 +13,13 @@
 
 #define FLAG_ISSET(x) (registers.F & (x))
 #define FLAG_SET(x) (registers.F |= (x))
-#define FLAG_CLEAR(x) (registers.F &= ~(x))
+#define FLAG_CLEAR(x) (registers.F &= ~x)
+
+
+
+extern int m_timercounter;
+extern int m_dividercounter;
+
 
 struct registers {
 
@@ -103,7 +109,7 @@ struct opcode {
 struct Instruction {
     signed char operand_length; //-3: word LD, -2: byte LD, -1: register specific, 0: none, 1:byte, 2: word
     void *function;
-    signed char cycles;
+    int cycles;
     
 
 }extern const instructions[256];
@@ -183,6 +189,11 @@ void GetInput (int *wakeupcaller);
 int CpuStep (void);
 void CheckInterrupts(void);
 
-
-
 int realtimeDebug(void);
+int GetFrequency(void);
+int IsClockEnabled(void);
+void UpdateDivider (int cycles);
+void UpdateTiming (int cycles);
+void RequestInterrupt(int val);
+void LoadRom (void);
+void Update (void);

@@ -4,49 +4,24 @@
 #include "memory.h"
 #include "control.h"
 #include "display.h"
+#include "gpu.h"
 
+#define CLOCKSPEED 4194304
+// #define TIMA 0xFF05
+// #define TMA 0xFF06
+// #define TAC 0xFF07
 
 struct timer timer;
 struct interrupt interrupt;
 struct registers registers;
 unsigned char stopped;
 
-char Filename[] = "Red.gb";
 
-void LoadRom (void){
+int m_timercounter;
+int m_dividercounter = 256;
 
-    FILE *f;
-    f = fopen(Filename, "r");
-    //Reads all x8000 bytes of Rom data
-    fread(memory, 0x8000, 1, f);
-
-    printf("Completed Loading Rom \n");
-    fclose(f);
-}
-
-
-void Reset (void) {
-
-    registers.A = 0x01;
-	registers.F = 0x00; //If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
-	registers.B = 0x00;
-	registers.C = 0x14;
-	registers.D = 0x00;
-	registers.E = 0x00;
-	registers.H = 0xC0;
-	registers.L = 0x60;
-	registers.SP = 0xfffe;
-	registers.PC = 0x101;
-	
-	interrupt.master = 1;
-	interrupt.enable = 0;
-	interrupt.flag = 0;
-
-}
 
 const struct Instruction instructions[256] = {
-
-
     //-3: word LD, -2: byte LD, -1: register specific, 0: none, 1:byte, 2: word
 
     {0, nop, 1},   //0x00 
@@ -291,7 +266,7 @@ const struct Instruction instructions[256] = {
     {-2, SUB8, 2},
     {-1, RST, 4},
 //Ex
-    {-1, load8bit, 3}, //0x00
+    {-2, load8bit, 3}, //0x00
     {-1, POP, 3},
     {-1, load8bit, 2},
     {0, nop, 1},
@@ -309,7 +284,7 @@ const struct Instruction instructions[256] = {
     {-2, XOR8, 2},
     {-1, RST, 4},
 //Fx
-    {-1, load8bit, 3}, //0x00
+    {-2, load8bit, 3}, //0x00
     {-1, POP, 3},
     {-3, load8bit, 2},
     {0, DI, 1},
@@ -330,25 +305,8 @@ const struct Instruction instructions[256] = {
 };
 
 
-void Update () { //gpu step
-
-    const int MAXCYCLES = 69905;
-
-    int currentcycles = 0;
-    while (currentcycles < MAXCYCLES) {
-
-        int cycles = CpuStep ();
-        currentcycles += cycles;
-
-        CheckInterrupts();
-
-    }
-
-    //Render ();
-}
-
-
 int CpuStep (void) {
+    
 
     unsigned char instruction = ReadByte(registers.PC++);
 
@@ -363,8 +321,12 @@ int CpuStep (void) {
         case -2:
             ((void (*)(unsigned char, unsigned char))instructions[instruction].function)(instruction, ReadByte(registers.PC++));
             break;
-        case 0:
+        case -1:
             ((void (*)(unsigned char))instructions[instruction].function)(instruction);
+            break;
+
+        case 0:
+            ((void (*)())instructions[instruction].function)();
             break;
         case 1:
             ((void (*)(unsigned char))instructions[instruction].function)(ReadByte(registers.PC++));
@@ -374,62 +336,6 @@ int CpuStep (void) {
 
     return instructions[instruction].cycles;
 
-}
-
-
-
-void CheckInterrupts (void) {
-        
-    //halt and stop
-
-    if ((interrupt.flag) && (interrupt.master))
-    {
-        HandleInterrupt();
-    }
-
-}
-
-int main (void) {
-
-    Reset(); //init
-    LoadRom();
-
-    char input = 6;
-    while (input == 6){
-        input = realtimeDebug();
-    }
-   
-}
-
-void HandleInterrupt (void) {
-
-    unsigned short InterruptAddress[5] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
-
-    unsigned char priority;
-    unsigned char currentFlag;
-
-    if (interrupt.FVBlank) {
-        currentFlag = 0x01;
-        priority = 1;
-    } else if (interrupt.FLCD) {
-        currentFlag = 0x02;
-        priority = 2;
-    } else if (interrupt.FTimer) {
-        currentFlag = 0x04;
-        priority = 3;
-    } else if (interrupt.FSerial) {
-        currentFlag = 0x08;
-        priority = 4;
-    } else {
-        currentFlag = 0x10;
-        priority = 5;
-    }
-
-    if(interrupt.enable & currentFlag) {
-        interrupt.master = 0;
-        CALL(0x00, InterruptAddress[priority]);
-    }//interrupt call
-    
 }
 
 
@@ -467,6 +373,7 @@ if (!FLAG_ISSET(FLAG_N)) {  // after an addition, adjust if (half-)carry occurre
 FLAG_SET((registers.A && registers.A) * 0x80); // the usual z flag
 FLAG_CLEAR(FLAG_HALF); // h flag is always cleared
 
+CreateBox("after DAA");
 }
 
 
@@ -499,55 +406,91 @@ void EI (void) {
 
 void AND (unsigned char Opcode) {
 
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
+    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
     struct opcode and;
     and.inst = Opcode;
-    registers.A &= *BitRegs[and.r2];
+    unsigned char val;
 
-    FLAG_SET((registers.A && registers.A) * 0x80); //Z
+    if (and.r2 == 6) {
+        val = ReadByte(registers.HL);
+    } else {
+        val = *BitRegs[and.r2];
+    }
+
+    registers.A &= val;
+
+    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_SET(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
+    CreateBox("After AND");
 
 }
 
 void XOR (unsigned char Opcode) {
 
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
+    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
     struct opcode xor;
     xor.inst = Opcode;
-    registers.A ^= *BitRegs[xor.r2];
+    unsigned char val;
+    
+    if (xor.r2 == 6) {
+        val = ReadByte(registers.HL);
+    } else {
+        val = *BitRegs[xor.r2];
+    }
 
-    printf("%04x", xor.r1);
-    CreateBox("after XOR");
-    FLAG_SET((registers.A == 0) * 0x80); //Z
+    registers.A ^= val;
+
+    // printf("%04x", xor.r1);
+    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
+
+    CreateBox("after XOR");
 
 }
 
 void OR (unsigned char Opcode) {
 
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
+    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
     struct opcode or;
     or.inst = Opcode;
-    registers.A |= *BitRegs[or.r2];
+    unsigned char val;
+    
+    if (or.r2 == 6) {
+        val = ReadByte(registers.HL);
+    } else {
+        val = *BitRegs[or.r2];
+    }
 
-    FLAG_SET((registers.A == 0) * 0x80); //Z
+    registers.A |= val;
+
+    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}; //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
+    CreateBox("after OR");
 }
 
 void CP (unsigned char Opcode) { //CP
 
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
-    struct opcode xor;
-    xor.inst = Opcode;
+    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
+    struct opcode cp;
+    cp.inst = Opcode;
 
     unsigned char A = registers.A;
-    SUBC(&A, *BitRegs[xor.r2], 0); //uses sub flags
+    unsigned char val;
+    
+    if (cp.r2 == 6) {
+        val = ReadByte(registers.HL);
+    } else {
+        val = *BitRegs[cp.r2];
+    }
+
+    SUBC(&A, val, 0); //uses sub flags
+    CreateBox("After CP Reg");
 
     // FLAG_SET((registers.A && registers.A) * 0x80); //Z
     // FLAG_SET(FLAG_N);
@@ -567,6 +510,7 @@ void SUB8 (unsigned char Opcode, unsigned char operand) {
     } else {
         SUBC(&registers.A, operand, 1);
     }
+
 }
 
 
@@ -574,31 +518,34 @@ void AND8 (unsigned char Opcode, unsigned char operand) {
 
     registers.A &= operand;
 
-    FLAG_SET((registers.A == 0) * 0x80); //Z
+    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_SET(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
 
+    CreateBox("After AND8");
 }
 
 void XOR8 (unsigned char Opcode, unsigned char operand) {
 
     registers.A ^= operand;
 
-    FLAG_SET((registers.A == 0) * 0x80); //Z
+    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
+    CreateBox("After XOR8");
 }
 
 void OR8 (unsigned char Opcode, unsigned char operand) {
 
     registers.A |= operand;
 
-    FLAG_SET((registers.A == 0) * 0x80); //Z
+    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
+    CreateBox("After OR8");
 }
 
 
@@ -606,6 +553,7 @@ void CP8 (unsigned char Opcode, unsigned char operand) {
 
     unsigned char A = registers.A;
     SUBC(&A, operand, 0); //uses sub flags
+    CreateBox("After CP8");
 
 
 }
@@ -613,11 +561,11 @@ void CP8 (unsigned char Opcode, unsigned char operand) {
 
 void load8bit(unsigned char Opcode, unsigned char operand){
     switch(Opcode){
-        case 0xE0: //ld (C) A
-            WriteByte( 0xFF00 + registers.C, registers.A );
+        case 0xE0: 
+            WriteByte( 0xFF00 + operand, registers.A );
             break;
         case 0xF0:
-            registers.A = ReadByte( 0xFF00 + registers.C );
+            registers.A = ReadByte( 0xFF00 + operand );
             break;
 
         case 0x06:
@@ -633,7 +581,7 @@ void load8bit(unsigned char Opcode, unsigned char operand){
             WriteByte(registers.HL, operand);
             break;
         
-        case 0x0E:
+        case 0x0E://ld (C) A
             registers.C = operand;
             break;
         case 0x1E:
@@ -681,10 +629,22 @@ void load16bit(unsigned char Opcode, unsigned short operand) {
 
 void loadRegB(unsigned char Opcode) {
     //A: 7, B: 0, C: 1, D: 2, E: 3, H: 4, L: 5, (HL): 6
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
+    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
     struct opcode load;
     load.inst = Opcode;
-    *BitRegs[load.r1] = *BitRegs[load.r2];
+
+    if (load.r1 == 0x06) {
+
+        WriteByte(registers.HL, *BitRegs[load.r2]);
+
+    } else if (load.r2 == 0x06) {
+        *BitRegs[load.r1] = ReadByte(registers.HL);
+
+    } else {
+       *BitRegs[load.r1] = *BitRegs[load.r2];
+    }
+
+    
 
 }
 
@@ -729,8 +689,10 @@ void INCRegS(unsigned char Opcode) {
     
     struct opcode Inc;
     Inc.inst = Opcode;
-
-    *topRowRegs[Inc.r1]++;
+    char label[50];
+    sprintf(label, "Increasing: 0x%04x by 1. r1 = 0x%04x", *topRowRegs[Inc.r1], Inc.r1);
+    CreateBox(label);
+    *topRowRegs[Inc.r1] += 1;
 }
 
 void INCRegB (unsigned char Opcode) {
@@ -745,7 +707,14 @@ void INCRegB (unsigned char Opcode) {
             ADDC(&registers.H, 1, 0);
             break;
         case 0x34:
-            ADDC(&memory[registers.HL], 1, 0);
+        //crazy solution
+            unsigned char HLpointing = ReadByte(registers.HL);
+            unsigned char *HLpointer = &HLpointing;
+
+            ADDC(HLpointer, 1, 0);
+
+            WriteByte(registers.HL, *HLpointer);
+            
             break;
 
         case 0x0C:
@@ -766,14 +735,22 @@ void INCRegB (unsigned char Opcode) {
 
 void ADD (unsigned char Opcode){
 
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
+    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
     struct opcode add;
     add.inst = Opcode;
+    unsigned char val;
+
+    if (add.r2 == 0x06) {
+        val = ReadByte(registers.HL);
+    } else {
+        val = *BitRegs[add.r2];
+    }
+
     if (add.low > 0x07) {
-        ADDC(&registers.A, *BitRegs[add.r2], 1);
+        ADDC(&registers.A, val, 1);
         return;
     } else {
-        ADDC(&registers.A, *BitRegs[add.r2], 0);
+        ADDC(&registers.A, val, 0);
         return;
     }   
 
@@ -791,14 +768,21 @@ void ADD8 (unsigned char Opcode, unsigned char operand) {
 
 void SUB (unsigned char Opcode) {
     
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
+    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
     struct opcode sub;
     sub.inst = Opcode;
+    unsigned char val;
+     if (sub.r2 == 0x06) {
+        val = ReadByte(registers.HL);
+    } else {
+        val = *BitRegs[sub.r2];
+    }
+
     if (sub.low > 0x07) {
-        SUBC(&registers.A, *BitRegs[sub.r2], 1);
+        SUBC(&registers.A, val, 1);
         return;
     } else {
-        SUBC(&registers.A, *BitRegs[sub.r2], 0);
+        SUBC(&registers.A, val, 0);
         return;
     }   
 }
@@ -849,7 +833,13 @@ void DECRegB (unsigned char Opcode) {
             SUBC(&registers.H, 1, 2);
             break;
         case 0x35:
-            SUBC(&memory[registers.HL], 1, 2);
+            unsigned char HLpointing = ReadByte(registers.HL);
+            unsigned char *HLpointer = &HLpointing;
+
+            SUBC(HLpointer, 1, 2);
+
+            WriteByte(registers.HL, *HLpointer);
+
             break;
 
         case 0x0D:
@@ -872,16 +862,23 @@ void DECRegS (unsigned char Opcode) {
    
     struct opcode Dec;
     Dec.inst = Opcode;
-
-    *topRowRegs[Dec.r1-3]--;
+    char label[50];
+    sprintf(label, "Decreasing: 0x%04x by 1. r1 = 0x%04x", *topRowRegs[Dec.r1 - 1], Dec.r1);
+    CreateBox(label);
+    *topRowRegs[Dec.r1-1] -= 1;
     //CHECK
 }
 
 void SUBC (unsigned char *destination, unsigned char val, unsigned char carry){
 
+    CreateBox("In SUBC");
     //signs may or may nto work
     signed int diff = *destination - val;
-    if (diff == 0) {FLAG_SET(FLAG_ZERO);} //Z
+    char label[50];
+    sprintf(label, "diff: %d, *destination: 0x%04x, val: 0x%04x", diff, *destination, val);
+    CreateBox(label);
+    if (diff == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}//Z
+    
     FLAG_SET(FLAG_N);
 
     unsigned char A = *destination & 0x0F; 
@@ -944,6 +941,7 @@ void ROTATE (unsigned char *object, unsigned char carry, unsigned char direct){
     if (*object == 0) {FLAG_SET(FLAG_ZERO);}
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
+    CreateBox("After Rotate");
 
 }
 
@@ -1002,51 +1000,58 @@ void ADDCS (unsigned short *destination, unsigned short val, unsigned char carry
 }
 
 void JUMPHL (void) {
+    char label[50];
+    sprintf(label, "After JMPHL, prev:%04x", registers.PC);
     registers.PC = registers.HL;
+    CreateBox(label);
 }
 
 void JUMP8 (unsigned char Opcode, signed char offset) {
 
     //NZ
-    if(Opcode == 0x20 && FLAG_ISSET(FLAG_ZERO)) {return;} //subtract one cycle
+    if(Opcode == 0x20 && FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;} //subtract one cycle
     //NC
-    if(Opcode == 0x30 && FLAG_ISSET(FLAG_CARRY)) {return;}
+    if(Opcode == 0x30 && FLAG_ISSET(FLAG_CARRY)) {CreateBox("test fail");return;}
     //Z
-    if(Opcode == 0x28 && !FLAG_ISSET(FLAG_ZERO)) {return;}
+    if(Opcode == 0x28 && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
     //C
-    if(Opcode == 0x38 && !FLAG_ISSET(FLAG_ZERO)) {return;}
+    if(Opcode == 0x38 && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
 
+    char label[50];
+    sprintf(label, "After JMP8, prev:%04x", registers.PC);
     registers.PC += offset; 
-    CreateBox("After JMP8");
-        
+    CreateBox(label);
+    
     
 }
 
 void JUMP16 (unsigned char Opcode, unsigned short Address) {
 
     //NZ
-    if(Opcode == 0xC2 && FLAG_ISSET(FLAG_ZERO)) {return;} //subtract one cycle
+    if(Opcode == 0xC2 && FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;} //subtract one cycle
     //NC
-    if(Opcode == 0xD2 && FLAG_ISSET(FLAG_CARRY)) {return;}
+    if(Opcode == 0xD2 && FLAG_ISSET(FLAG_CARRY)) {CreateBox("test fail");return;}
     //Z
-    if(Opcode == 0xCA && !FLAG_ISSET(FLAG_ZERO)) {return;}
+    if(Opcode == 0xCA && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
     //C
-    if(Opcode == 0xDA && !FLAG_ISSET(FLAG_ZERO)) {return;}
+    if(Opcode == 0xDA && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
 
+    char label[50];
+    sprintf(label, "After JMP16, prev:%04x", registers.PC);
     registers.PC = Address; 
-        
+    CreateBox(label);
 }
 
 void CALL (unsigned char Opcode, unsigned short Address) {
 
     //NZ
-    if(Opcode == 0xC4 && FLAG_ISSET(FLAG_ZERO)) {return;} //subtract one cycle
+    if(Opcode == 0xC4 && FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;} //subtract one cycle
     //NC
-    if(Opcode == 0xD4 && FLAG_ISSET(FLAG_CARRY)) {return;}
+    if(Opcode == 0xD4 && FLAG_ISSET(FLAG_CARRY)) {CreateBox("test fail");return;}
     //Z
-    if(Opcode == 0xCC && !FLAG_ISSET(FLAG_ZERO)) {return;}
+    if(Opcode == 0xCC && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
     //C
-    if(Opcode == 0xDC && !FLAG_ISSET(FLAG_ZERO)) {return;}
+    if(Opcode == 0xDC && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
 
 
     WriteStack(registers.PC);
@@ -1057,13 +1062,13 @@ void CALL (unsigned char Opcode, unsigned short Address) {
 void RET (unsigned char Opcode){
 
     //NZ
-    if(Opcode == 0xC0 && FLAG_ISSET(FLAG_ZERO)) {return;} //subtract one cycle
+    if(Opcode == 0xC0 && FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;} //subtract one cycle
     //NC
-    if(Opcode == 0xD0 && FLAG_ISSET(FLAG_CARRY)) {return;}
+    if(Opcode == 0xD0 && FLAG_ISSET(FLAG_CARRY)) {CreateBox("test fail");return;}
     //Z
-    if(Opcode == 0xC8 && !FLAG_ISSET(FLAG_ZERO)) {return;}
+    if(Opcode == 0xC8 && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
     //C
-    if(Opcode == 0xD8 && !FLAG_ISSET(FLAG_ZERO)) {return;}
+    if(Opcode == 0xD8 && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
 
     registers.PC = ReadStack();
 
@@ -1105,8 +1110,9 @@ void CB (unsigned char Opcode, unsigned char operand) {
     CB.inst = operand;
 
     unsigned char direction;
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, &memory[registers.HL], &registers.A};
+    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
 
+    
     if(CB.low < 0x08) {direction = 1;} else {direction = 0;}
 
     unsigned char Bitnum;
@@ -1116,6 +1122,47 @@ void CB (unsigned char Opcode, unsigned char operand) {
         Bitnum = (CB.inst-0x8)/8;
     } else if (CB.high > 0xB){
         Bitnum = (CB.inst-0xC)/8;
+    }
+
+
+    if(CB.r2 == 0x06) {
+        unsigned char HLpointing = ReadByte(registers.HL);
+        unsigned char *HLpointer = &HLpointing;
+
+        switch(CB.high) {
+            case 0x0:
+                ROTATE(HLpointer, 0, direction);
+                break;
+            case 0x1:
+                ROTATE(HLpointer, 1, direction);
+                break;
+            case 0x3:
+                SHIFT(*HLpointer, 0, direction);
+            case 0x4:
+            case 0x5:
+            case 0x6:
+            case 0x7: //BIT
+            
+                BIT(Bitnum, *HLpointer, 0);
+                break;
+            
+            case 0x8:
+            case 0x9:
+            case 0xA:
+            case 0xB: //RES
+                
+                *HLpointer = BIT(Bitnum, *HLpointer, 2);
+                break;
+
+            case 0xC:
+            case 0xD:
+            case 0xE:
+            case 0xF: //SET
+                *HLpointer = BIT(Bitnum, *HLpointer, 1);
+                break;
+        }
+        WriteByte(registers.HL, *HLpointer);
+        return;
     }
 
     switch(CB.high){
@@ -1213,6 +1260,7 @@ unsigned char SHIFT (unsigned char X, unsigned char logical, unsigned char direc
 }
 
 unsigned char BIT (unsigned char bit, unsigned char byte, unsigned char OP){
+    
     //OP(operation): 0 = bit, 1 = set, 2 = res
     //No need for clocks here
     // xx b r [r(HL) = 110]
@@ -1239,4 +1287,197 @@ unsigned char BIT (unsigned char bit, unsigned char byte, unsigned char OP){
     }
     return byte;
 
+}
+
+
+
+
+void Reset (void) {
+
+    registers.A = 0x01;
+	registers.F = 0x00; //If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
+	registers.B = 0x00; //for the bmg pokemon red start
+	registers.C = 0x14;
+	registers.D = 0x00;
+	registers.E = 0x00;
+	registers.H = 0xC0;
+	registers.L = 0x60;
+	registers.SP = 0xfffe;
+	registers.PC = 0x101;
+	
+	interrupt.master = 0;
+	interrupt.enable = 0;
+	interrupt.flag = 0;
+
+     
+
+}
+
+void RequestInterrupt (int val) {
+
+    switch (val)
+    {
+    case 0:
+        interrupt.FVBlank = 1;
+        break;
+    case 1:
+        interrupt.FLCD = 1;
+        break;
+    case 2:
+        interrupt.FTimer = 1;
+        break;
+    case 3:
+        interrupt.FSerial = 1;
+        break;
+    case 4:
+        interrupt.FJoypad = 1;
+        break;
+
+    }
+
+    CheckInterrupts();
+
+}
+
+void CheckInterrupts (void) {
+        
+    //halt and stop
+
+    if ((interrupt.flag) && (interrupt.master))
+    {
+        HandleInterrupt();
+    }
+
+}
+
+
+void HandleInterrupt (void) {
+
+    unsigned short InterruptAddress[5] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
+
+    unsigned char priority;
+    unsigned char currentFlag;
+
+    if (interrupt.FVBlank) {
+        currentFlag = 0x01;
+        priority = 1;
+    } else if (interrupt.FLCD) {
+        currentFlag = 0x02;
+        priority = 2;
+    } else if (interrupt.FTimer) {
+        currentFlag = 0x04;
+        priority = 3;
+    } else if (interrupt.FSerial) {
+        currentFlag = 0x08;
+        priority = 4;
+    } else {
+        currentFlag = 0x10;
+        priority = 5;
+    }
+
+    if(interrupt.enable & currentFlag) {
+
+        interrupt.master = 0;
+        interrupt.flag &= ~currentFlag;
+        interrupt.enable &= ~currentFlag;
+
+        CALL(0x00, InterruptAddress[priority]);
+
+    }//interrupt call
+    
+}
+
+
+int main (void) {
+
+    m_timercounter = CLOCKSPEED / GetFrequency(); //number of cycles per incrementation
+    
+    Reset(); //init
+    LoadRom();
+
+    while(1){
+        Update();
+
+    }
+    
+}
+
+void Update (void) { //gpu step
+
+    const int MAXCYCLES = 69905;
+    int currentcycles = 0;
+
+    while (currentcycles < MAXCYCLES) {
+
+        int cycles = realtimeDebug();
+        currentcycles += cycles;
+        UpdateGraphics(cycles);  
+        UpdateTiming(cycles);
+        CheckInterrupts();
+
+    }
+
+    //Render ();
+}
+
+
+void UpdateTiming (int cycles) {
+
+    UpdateDivider (cycles);
+
+    if(IsClockEnabled()) {
+
+        m_timercounter -= cycles;
+
+        if (m_timercounter <= 0) {
+                
+            m_timercounter = CLOCKSPEED / GetFrequency();
+        
+        if (timer.TIMA == 255)
+        {
+            timer.TIMA = timer.TMA;
+
+            RequestInterrupt(2) ;
+        }
+        else
+        {
+            timer.TIMA++;
+        }
+
+        }
+    }
+    
+
+}
+
+void UpdateDivider (int cycles) {
+
+    m_dividercounter -= cycles;
+
+    if (m_dividercounter <= 0){
+
+        m_dividercounter = 256;
+        timer.DIV++;
+
+    }
+    
+}
+
+int IsClockEnabled () {
+    return (timer.TAC & 0x04);
+}
+
+int GetFrequency() {
+    int frequency;
+    frequency = (timer.TAC & 0x03);
+    switch (frequency) {
+        case 0:
+            return 1024;
+        case 1:
+            return 16;
+        case 2:
+            return 64;
+        case 3:
+            return 256;
+    }
 }

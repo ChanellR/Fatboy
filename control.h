@@ -40,6 +40,7 @@ struct timer {
     
 }extern timer;
 
+
 struct joypad {
     union {
         unsigned char keys;
