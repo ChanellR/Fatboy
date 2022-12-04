@@ -1,4 +1,7 @@
+#include <SDL2/SDL.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <windows.h>
 
 #include "header.h"
 #include "memory.h"
@@ -6,1478 +9,173 @@
 #include "display.h"
 #include "gpu.h"
 
-#define CLOCKSPEED 4194304
-// #define TIMA 0xFF05
-// #define TMA 0xFF06
-// #define TAC 0xFF07
+#define SCREEN_WIDTH 900 
+#define SCREEN_HEIGHT 900
 
-struct timer timer;
-struct interrupt interrupt;
-struct registers registers;
-unsigned char stopped;
+void DrawTile (unsigned char * stream, SDL_Renderer * render, int x_offset, int y_offset);
+void CreatePixelStream (unsigned short Address);
+unsigned char Stream[64 * 2];
 
 
-int m_timercounter;
-int m_dividercounter = 256;
+int main(int argc, char** argv){
 
+    if(SDL_Init(SDL_INIT_VIDEO) < 0){
+        printf("Error: SDL failed to initialize\nSDL Error: '%s'\n", SDL_GetError());
+        return 1;
+    }
 
-const struct Instruction instructions[256] = {
-    //-3: word LD, -2: byte LD, -1: register specific, 0: none, 1:byte, 2: word
-
-    {0, nop, 1},   //0x00 
-    {-3, load16bit, 3}, //0x01
-    {-1, loadRegS, 2},  //0x02
-    {-1, INCRegS, 2},   //0x03
-    {-1, INCRegB, 1},   //0x04   
-    {-1, DECRegB, 1},   //0x05
-    {-2, load8bit, 2},   //0x06
-    {-1, RR, 1},   //0x07
-    {-3, load16bit, 5},   //0x08
-    {-1, ADDHL, 2},   //0x09
-    {-1, loadRegB, 2}, //0x0a
-    {-1, DECRegS, 2},  //0x0b
-    {-1, INCRegB, 1},   //0x0c
-    {-1, DECRegB, 1},   //0x0d
-    {-2, load8bit, 2},   //0x0e
-    {-1, RR, 1},   //0x0f
-
-    {0, STOP, 2},   //0x00 
-    {-3, load16bit, 3}, //0x01
-    {-1, loadRegS, 2},  //0x02
-    {-1, INCRegS, 2},   //0x03
-    {-1, INCRegB, 1},   //0x04   
-    {-1, DECRegB, 1},   //0x05
-    {-2, load8bit, 2},   //0x06
-    {-1, RR, 1},   //0x07
-    {-2, JUMP8, 3},   //0x08
-    {-1, ADDHL, 2},   //0x09
-    {-1, loadRegB, 2}, //0x0a
-    {-1, DECRegS, 2},  //0x0b
-    {-1, INCRegB, 1},   //0x0c
-    {-1, DECRegB, 1},   //0x0d
-    {-2, load8bit, 2},   //0x0e
-    {-1, RR, 1},   //0x0f
-
-    {-2, JUMP8, 3},   //0x00 
-    {-3, load16bit, 3}, //0x01
-    {-1, loadRegS, 2},  //0x02
-    {-1, INCRegS, 2},   //0x03
-    {-1, INCRegB, 1},   //0x04   
-    {-1, DECRegB, 1},   //0x05
-    {-2, load8bit, 2},   //0x06
-    {0, DAA, 1},   //0x07
-    {-2, JUMP8, 3},   //0x08
-    {-1, ADDHL, 2},   //0x09
-    {-1, loadRegB, 2}, //0x0a
-    {-1, DECRegS, 2},  //0x0b
-    {-1, INCRegB, 1},   //0x0c
-    {-1, DECRegB, 1},   //0x0d
-    {-2, load8bit, 2},   //0x0e
-    {0, CPL, 1},   //0x0f
-
-    {-2, JUMP8, 3},   //0x00 
-    {-3, load16bit, 3}, //0x01
-    {-1, loadRegS, 2},  //0x02
-    {-1, INCRegS, 2},   //0x03
-    {-1, INCRegB, 1},   //0x04   
-    {-1, DECRegB, 1},   //0x05
-    {-2, load8bit, 2},   //0x06
-    {0, SCF, 1},   //0x07
-    {-2, JUMP8, 3},   //0x08
-    {-1, ADDHL, 2},   //0x09
-    {-1, loadRegB, 2}, //0x0a
-    {-1, DECRegS, 2},  //0x0b
-    {-1, INCRegB, 1},   //0x0c
-    {-1, DECRegB, 1},   //0x0d
-    {-2, load8bit, 2},   //0x0e
-    {0, CCF, 1},   //0x0f
-
-    {-1, loadRegB, 1}, //0x00
-    {-1, loadRegB, 1}, //0x01
-    {-1, loadRegB, 1}, //0x02
-    {-1, loadRegB, 1}, //0x03
-    {-1, loadRegB, 1}, //0x04
-    {-1, loadRegB, 1}, //0x05
-    {-1, loadRegB, 1}, //0x06
-    {-1, loadRegB, 1}, //0x07
-    {-1, loadRegB, 1}, //0x08
-    {-1, loadRegB, 1}, //0x09
-    {-1, loadRegB, 1}, //0x0A
-    {-1, loadRegB, 1}, //0x0B
-    {-1, loadRegB, 1}, //0x0C
-    {-1, loadRegB, 1}, //0x0D
-    {-1, loadRegB, 1}, //0x0E
-    {-1, loadRegB, 1}, //0x0F
-
-    {-1, loadRegB, 1}, //0x00
-    {-1, loadRegB, 1}, //0x01
-    {-1, loadRegB, 1}, //0x02
-    {-1, loadRegB, 1}, //0x03
-    {-1, loadRegB, 1}, //0x04
-    {-1, loadRegB, 1}, //0x05
-    {-1, loadRegB, 1}, //0x06
-    {-1, loadRegB, 1}, //0x07
-    {-1, loadRegB, 1}, //0x08
-    {-1, loadRegB, 1}, //0x09
-    {-1, loadRegB, 1}, //0x0A
-    {-1, loadRegB, 1}, //0x0B
-    {-1, loadRegB, 1}, //0x0C
-    {-1, loadRegB, 1}, //0x0D
-    {-1, loadRegB, 1}, //0x0E
-    {-1, loadRegB, 1}, //0x0F
-
-    {-1, loadRegB, 1}, //0x00
-    {-1, loadRegB, 1}, //0x01
-    {-1, loadRegB, 1}, //0x02
-    {-1, loadRegB, 1}, //0x03
-    {-1, loadRegB, 1}, //0x04
-    {-1, loadRegB, 1}, //0x05
-    {-1, loadRegB, 1}, //0x06
-    {-1, loadRegB, 1}, //0x07
-    {-1, loadRegB, 1}, //0x08
-    {-1, loadRegB, 1}, //0x09
-    {-1, loadRegB, 1}, //0x0A
-    {-1, loadRegB, 1}, //0x0B
-    {-1, loadRegB, 1}, //0x0C
-    {-1, loadRegB, 1}, //0x0D
-    {-1, loadRegB, 1}, //0x0E
-    {-1, loadRegB, 1}, //0x0F
-
-    {-1, loadRegB, 1}, //0x00
-    {-1, loadRegB, 1}, //0x01
-    {-1, loadRegB, 1}, //0x02
-    {-1, loadRegB, 1}, //0x03
-    {-1, loadRegB, 1}, //0x04
-    {-1, loadRegB, 1}, //0x05
-    {0, HALT, 1}, //0x06
-    {-1, loadRegB, 1}, //0x07
-    {-1, loadRegB, 1}, //0x08
-    {-1, loadRegB, 1}, //0x09
-    {-1, loadRegB, 1}, //0x0A
-    {-1, loadRegB, 1}, //0x0B
-    {-1, loadRegB, 1}, //0x0C
-    {-1, loadRegB, 1}, //0x0D
-    {-1, loadRegB, 1}, //0x0E
-    {-1, loadRegB, 1}, //0x0F
-
-    {-1, ADD, 1}, //0x00
-    {-1, ADD, 1}, //0x01
-    {-1, ADD, 1}, //0x02
-    {-1, ADD, 1}, //0x03
-    {-1, ADD, 1}, //0x04
-    {-1, ADD, 1}, //0x05
-    {-1, ADD, 1}, //0x06
-    {-1, ADD, 1}, //0x07
-    {-1, ADD, 1}, //0x08
-    {-1, ADD, 1}, //0x09
-    {-1, ADD, 1}, //0x0A
-    {-1, ADD, 1}, //0x0B
-    {-1, ADD, 1}, //0x0C
-    {-1, ADD, 1}, //0x0D
-    {-1, ADD, 1}, //0x0E
-    {-1, ADD, 1}, //0x0F
-
-    {-1, SUB, 1}, //0x00
-    {-1, SUB, 1}, //0x01
-    {-1, SUB, 1}, //0x02
-    {-1, SUB, 1}, //0x03
-    {-1, SUB, 1}, //0x04
-    {-1, SUB, 1}, //0x05
-    {-1, SUB, 1}, //0x06
-    {-1, SUB, 1}, //0x07
-    {-1, SUB, 1}, //0x08
-    {-1, SUB, 1}, //0x09
-    {-1, SUB, 1}, //0x0A
-    {-1, SUB, 1}, //0x0B
-    {-1, SUB, 1}, //0x0C
-    {-1, SUB, 1}, //0x0D
-    {-1, SUB, 1}, //0x0E
-    {-1, SUB, 1}, //0x0F
-
-    {-1, AND, 1}, //0x0
-    {-1, AND, 1},
-    {-1, AND, 1},
-    {-1, AND, 1},
-    {-1, AND, 1},
-    {-1, AND, 1},
-    {-1, AND, 1},
-    {-1, AND, 1},
-
-    {-1, XOR, 1}, //0x08
-    {-1, XOR, 1},
-    {-1, XOR, 1},
-    {-1, XOR, 1},
-    {-1, XOR, 1},
-    {-1, XOR, 1},
-    {-1, XOR, 1},
-    {-1, XOR, 1},
-
-    {-1, OR, 1}, //0x00
-    {-1, OR, 1},
-    {-1, OR, 1},
-    {-1, OR, 1},
-    {-1, OR, 1},
-    {-1, OR, 1},
-    {-1, OR, 1},
-    {-1, OR, 1},
-
-    {-1, CP, 1}, //0x08
-    {-1, CP, 1},
-    {-1, CP, 1},
-    {-1, CP, 1},
-    {-1, CP, 1},
-    {-1, CP, 1},
-    {-1, CP, 1},
-    {-1, CP, 1},
-///Cx
-    {-1, RET, 5}, //0x00
-    {-1, POP, 3},
-    {-3, JUMP16, 4},
-    {-3, JUMP16, 4},
-    {-3, CALL, 6},
-    {-1, PUSH, 4},
-    {-2, ADD8, 2},
-    {-1, RST, 4},
-
-    {-1, RET, 5}, //0x08
-    {-1, RET, 4},
-    {-3, JUMP16, 4},
-    {-2, CB, 2},
-    {-3, CALL, 6},
-    {-3, CALL, 6},
-    {-2, ADD8, 1},
-    {-1, RST, 4},
-///Dx
-    {-1, RET, 5}, //0x00
-    {-1, POP, 3},
-    {-3, JUMP16, 4},
-    {0, nop, 1},
-    {-3, CALL, 6},
-    {-1, PUSH, 4},
-    {-2, SUB8, 2},
-    {-1, RST, 4},
-
-    {-1, RET, 5}, //0x08
-    {-1, RETI, 4},
-    {-3, JUMP16, 4},
-    {0, nop, 1},
-    {-3, CALL, 6},
-    {0, nop, 1},
-    {-2, SUB8, 2},
-    {-1, RST, 4},
-//Ex
-    {-2, load8bit, 3}, //0x00
-    {-1, POP, 3},
-    {-1, load8bit, 2},
-    {0, nop, 1},
-    {0, nop, 1},
-    {-1, PUSH, 4},
-    {-2, AND8, 2},
-    {-1, RST, 4},
-
-    {-4, ADDSP, 4}, //0x08
-    {0, JUMPHL, 1},
-    {-3, load16bit, 4},
-    {0, nop, 1},
-    {0, nop, 1},
-    {0, nop, 1},
-    {-2, XOR8, 2},
-    {-1, RST, 4},
-//Fx
-    {-2, load8bit, 3}, //0x00
-    {-1, POP, 3},
-    {-3, load8bit, 2},
-    {0, DI, 1},
-    {0, nop, 1},
-    {-1, PUSH, 4},
-    {-2, OR8, 2},
-    {-1, RST, 4},
-
-    {-4, ADDSP, 3}, //0x08
-    {-1, loadRegS, 2},
-    {-3, load16bit, 4},
-    {0, EI, 1},
-    {0, nop, 1},
-    {0, nop, 1},
-    {-2, CP8, 2},
-    {-1, RST, 4}
+    SDL_Window *window = SDL_CreateWindow("SLD test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
     
-};
-
-
-int CpuStep (void) {
-    
-
-    unsigned char instruction = ReadByte(registers.PC++);
-
-    switch (instructions[instruction].operand_length){
-        
-        case -4:
-            ((void (*)(unsigned char, signed char))instructions[instruction].function)(instruction, ReadByte(registers.PC++));
-        case -3:
-            ((void (*)(unsigned char, unsigned short))instructions[instruction].function)(instruction, ReadShort(registers.PC));
-            registers.PC += 2;
-            break;
-        case -2:
-            ((void (*)(unsigned char, unsigned char))instructions[instruction].function)(instruction, ReadByte(registers.PC++));
-            break;
-        case -1:
-            ((void (*)(unsigned char))instructions[instruction].function)(instruction);
-            break;
-
-        case 0:
-            ((void (*)())instructions[instruction].function)();
-            break;
-        case 1:
-            ((void (*)(unsigned char))instructions[instruction].function)(ReadByte(registers.PC++));
-            break;
-
+    if(!window){
+        printf("Error: Failed to open window\nSDL Error: '%s'\n", SDL_GetError());
+        return 1;
     }
 
-    return instructions[instruction].cycles;
-
-}
-
-
-
-//BC: 000, DE: 010, HL: 100, SP: 110 r1
-// B: 000, D: 010, H:100, (HL): 110 r1
-// C: 001, E: 011, L: 101, A:111 
-unsigned short *topRowRegs[7] = {&registers.BC, NULL, &registers.DE, NULL, &registers.HL, NULL, &registers.SP};
-unsigned char *topRowRegsHigh[6] = {&registers.B, NULL, &registers.D, NULL, &registers.H, NULL}; //(HL) should be at end
-unsigned char *topRowRegsHigh2[8] = {NULL, &registers.C, NULL, &registers.E, NULL, &registers.L, NULL, &registers.A};
-
-void nop(void) {}
-
-void STOP(void) {
-    stopped = 1;
-    //Reset, start at 0000h
-    //input, start after instruction
-}
-
-void HALT (void) {
-    stopped = 2;
-    //Halted
-}
-
-void DAA (void) {
-    // note: assumes a is a uint8_t and wraps from 0xff to 0
-if (!FLAG_ISSET(FLAG_N)) {  // after an addition, adjust if (half-)carry occurred or if result is out of bounds
-  if (FLAG_ISSET(FLAG_CARRY) || registers.A > 0x99) { registers.A += 0x60; FLAG_SET(FLAG_CARRY); }
-  if (FLAG_ISSET(FLAG_HALF) || (registers.A & 0x0f) > 0x09) { registers.A += 0x6; }
-} else {  // after a subtraction, only adjust if (half-)carry occurred
-  if (FLAG_ISSET(FLAG_CARRY)) { registers.A -= 0x60; }
-  if (FLAG_ISSET(FLAG_HALF)) { registers.A -= 0x6; }
-}
-// these flags are always updated
-FLAG_SET((registers.A && registers.A) * 0x80); // the usual z flag
-FLAG_CLEAR(FLAG_HALF); // h flag is always cleared
-
-CreateBox("after DAA");
-}
-
-
-void CPL (void) {
-
-    registers.A &= 0xFF;
-}
-
-void SCF (void) {
-    
-    FLAG_SET(FLAG_CARRY);
-}
-
-void CCF (void) {
-
-    if(FLAG_ISSET(FLAG_CARRY)) {
-        FLAG_CLEAR(FLAG_CARRY);
-    } else {
-        FLAG_SET(FLAG_CARRY);
-    }
-}
-
-void DI (void) {
-    interrupt.master = 0;
-}
-
-void EI (void) {
-    interrupt.master = 1;
-}
-
-void AND (unsigned char Opcode) {
-
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
-    struct opcode and;
-    and.inst = Opcode;
-    unsigned char val;
-
-    if (and.r2 == 6) {
-        val = ReadByte(registers.HL);
-    } else {
-        val = *BitRegs[and.r2];
-    }
-
-    registers.A &= val;
-
-    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
-    FLAG_CLEAR(FLAG_N);
-    FLAG_SET(FLAG_HALF);
-    FLAG_CLEAR(FLAG_CARRY);
-    CreateBox("After AND");
-
-}
-
-void XOR (unsigned char Opcode) {
-
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
-    struct opcode xor;
-    xor.inst = Opcode;
-    unsigned char val;
-    
-    if (xor.r2 == 6) {
-        val = ReadByte(registers.HL);
-    } else {
-        val = *BitRegs[xor.r2];
-    }
-
-    registers.A ^= val;
-
-    // printf("%04x", xor.r1);
-    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
-    FLAG_CLEAR(FLAG_N);
-    FLAG_CLEAR(FLAG_HALF);
-    FLAG_CLEAR(FLAG_CARRY);
-
-    CreateBox("after XOR");
-
-}
-
-void OR (unsigned char Opcode) {
-
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
-    struct opcode or;
-    or.inst = Opcode;
-    unsigned char val;
-    
-    if (or.r2 == 6) {
-        val = ReadByte(registers.HL);
-    } else {
-        val = *BitRegs[or.r2];
-    }
-
-    registers.A |= val;
-
-    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}; //Z
-    FLAG_CLEAR(FLAG_N);
-    FLAG_CLEAR(FLAG_HALF);
-    FLAG_CLEAR(FLAG_CARRY);
-    CreateBox("after OR");
-}
-
-void CP (unsigned char Opcode) { //CP
-
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
-    struct opcode cp;
-    cp.inst = Opcode;
-
-    unsigned char A = registers.A;
-    unsigned char val;
-    
-    if (cp.r2 == 6) {
-        val = ReadByte(registers.HL);
-    } else {
-        val = *BitRegs[cp.r2];
-    }
-
-    SUBC(&A, val, 0); //uses sub flags
-    CreateBox("After CP Reg");
-
-    // FLAG_SET((registers.A && registers.A) * 0x80); //Z
-    // FLAG_SET(FLAG_N);
-    // FLAG_CLEAR(FLAG_HALF);
-    // FLAG_CLEAR(FLAG_CARRY); //LOOK
-
-    // if (Opcode == 0xBF) {
-    //     FLAG_SET(FLAG_ZERO);
-    //     FLAG_SET(FLAG_N);
-    // }
-}
-
-void SUB8 (unsigned char Opcode, unsigned char operand) {
-
-        if (Opcode = 0xD6) {
-        SUBC(&registers.A, operand, 0);
-    } else {
-        SUBC(&registers.A, operand, 1);
-    }
-
-}
-
-
-void AND8 (unsigned char Opcode, unsigned char operand) {
-
-    registers.A &= operand;
-
-    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
-    FLAG_CLEAR(FLAG_N);
-    FLAG_SET(FLAG_HALF);
-    FLAG_CLEAR(FLAG_CARRY);
-
-    CreateBox("After AND8");
-}
-
-void XOR8 (unsigned char Opcode, unsigned char operand) {
-
-    registers.A ^= operand;
-
-    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
-    FLAG_CLEAR(FLAG_N);
-    FLAG_CLEAR(FLAG_HALF);
-    FLAG_CLEAR(FLAG_CARRY);
-    CreateBox("After XOR8");
-}
-
-void OR8 (unsigned char Opcode, unsigned char operand) {
-
-    registers.A |= operand;
-
-    if (registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //Z
-    FLAG_CLEAR(FLAG_N);
-    FLAG_CLEAR(FLAG_HALF);
-    FLAG_CLEAR(FLAG_CARRY);
-    CreateBox("After OR8");
-}
-
-
-void CP8 (unsigned char Opcode, unsigned char operand) {
-
-    unsigned char A = registers.A;
-    SUBC(&A, operand, 0); //uses sub flags
-    CreateBox("After CP8");
-
-
-}
-
-
-void load8bit(unsigned char Opcode, unsigned char operand){
-    switch(Opcode){
-        case 0xE0: 
-            WriteByte( 0xFF00 + operand, registers.A );
-            break;
-        case 0xF0:
-            registers.A = ReadByte( 0xFF00 + operand );
-            break;
-
-        case 0x06:
-            registers.B = operand;
-            break;
-        case 0x16:
-            registers.D = operand;
-            break;
-        case 0x26:
-            registers.H = operand;
-            break;
-        case 0x36:
-            WriteByte(registers.HL, operand);
-            break;
-        
-        case 0x0E://ld (C) A
-            registers.C = operand;
-            break;
-        case 0x1E:
-            registers.E = operand;
-            break;
-        case 0x2E:
-            registers.L = operand;
-            break;
-        case 0x3E:
-            registers.A = operand;
-            break;
-
-    }
-}
-
-void load16bit(unsigned char Opcode, unsigned short operand) {
-    switch (Opcode){
-        case 0x01:
-            registers.BC = operand;
-            break;
-        case 0x11:
-            registers.DE = operand;
-            break;
-        case 0x21:
-            registers.HL = operand;
-            break;
-        case 0x31:
-            registers.SP = operand;
-            break;
-        case 0x08: //LD (a16) SP
-            WriteShort (operand, registers.SP);
-            break;
-        case 0xEA:
-            WriteByte(operand, registers.A);
-            break;
-        case 0xFA:
-            registers.A = ReadByte(operand);
-            break;
-        case 0xF8:
-            //Needs flags fo LD HL, SP + r8
-            break;
-
-    }
-}
-
-void loadRegB(unsigned char Opcode) {
-    //A: 7, B: 0, C: 1, D: 2, E: 3, H: 4, L: 5, (HL): 6
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
-    struct opcode load;
-    load.inst = Opcode;
-
-    if (load.r1 == 0x06) {
-
-        WriteByte(registers.HL, *BitRegs[load.r2]);
-
-    } else if (load.r2 == 0x06) {
-        *BitRegs[load.r1] = ReadByte(registers.HL);
-
-    } else {
-       *BitRegs[load.r1] = *BitRegs[load.r2];
-    }
-
-    
-
-}
-
-void loadRegS (unsigned char Opcode) {
-    switch (Opcode) {
-        case 0x02:
-            WriteByte(registers.BC, registers.A);
-            break;
-        case 0x12:
-            WriteByte(registers.DE, registers.A);
-            break;
-        case 0x22:
-            WriteByte(registers.HL, registers.A);
-            registers.HL++;
-            break;
-        case 0x32:
-            WriteByte(registers.HL, registers.A);
-            registers.HL--;
-            break;
-
-        case 0x0A:
-            registers.A = ReadByte(registers.BC);
-            break;
-        case 0x1A:
-            registers.A = ReadByte(registers.DE);
-            break;
-        case 0x2A:
-            registers.A = ReadByte(registers.HL);
-            registers.HL++;
-            break;
-        case 0x3A:
-            registers.A = ReadByte(registers.HL);
-            registers.HL--;
-            break;
-        case 0xF9:
-            registers.SP = registers.HL;
-            break;
-    }
-}
-
-void INCRegS(unsigned char Opcode) {
-    
-    struct opcode Inc;
-    Inc.inst = Opcode;
-    char label[50];
-    sprintf(label, "Increasing: 0x%04x by 1. r1 = 0x%04x", *topRowRegs[Inc.r1], Inc.r1);
-    CreateBox(label);
-    *topRowRegs[Inc.r1] += 1;
-}
-
-void INCRegB (unsigned char Opcode) {
-    switch(Opcode){
-        case 0x04:
-            ADDC(&registers.B, 1, 0);
-            break;
-        case 0x14:
-            ADDC(&registers.D, 1, 0);
-            break;
-        case 0x24:
-            ADDC(&registers.H, 1, 0);
-            break;
-        case 0x34:
-        //crazy solution
-            unsigned char HLpointing = ReadByte(registers.HL);
-            unsigned char *HLpointer = &HLpointing;
-
-            ADDC(HLpointer, 1, 0);
-
-            WriteByte(registers.HL, *HLpointer);
-            
-            break;
-
-        case 0x0C:
-            ADDC(&registers.C, 1, 0);
-            break;
-        case 0x1C:
-            ADDC(&registers.E, 1, 0);
-            break;
-        case 0x2C:
-            ADDC(&registers.L, 1, 0);
-            break;
-        case 0x3C:
-            ADDC(&registers.A, 1, 0);
-            break;
-
-    }
-}
-
-void ADD (unsigned char Opcode){
-
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
-    struct opcode add;
-    add.inst = Opcode;
-    unsigned char val;
-
-    if (add.r2 == 0x06) {
-        val = ReadByte(registers.HL);
-    } else {
-        val = *BitRegs[add.r2];
-    }
-
-    if (add.low > 0x07) {
-        ADDC(&registers.A, val, 1);
-        return;
-    } else {
-        ADDC(&registers.A, val, 0);
-        return;
-    }   
-
-}
-
-void ADD8 (unsigned char Opcode, unsigned char operand) {
-    if(Opcode == 0xC6) {
-        ADDC(&registers.A, operand, 0);
-        return;   
-    } else {
-        ADDC(&registers.A, operand, 1);
-        return; 
-    }
-}
-
-void SUB (unsigned char Opcode) {
-    
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
-    struct opcode sub;
-    sub.inst = Opcode;
-    unsigned char val;
-     if (sub.r2 == 0x06) {
-        val = ReadByte(registers.HL);
-    } else {
-        val = *BitRegs[sub.r2];
-    }
-
-    if (sub.low > 0x07) {
-        SUBC(&registers.A, val, 1);
-        return;
-    } else {
-        SUBC(&registers.A, val, 0);
-        return;
-    }   
-}
-
-void SUB16 (unsigned short *A, unsigned char B){
-    //don't edit Z for add HL, rr
-    
-    int diff = *A - B;
-
-    FLAG_CLEAR(FLAG_ZERO);
-
-    *A &= 0xFF, B &= 0xFF;
-    if ((A - B) && 0x100) {FLAG_SET(FLAG_HALF);} else {FLAG_CLEAR(FLAG_HALF);}
-
-    if((diff < 0x0)) {FLAG_SET(FLAG_CARRY);} else {FLAG_CLEAR(FLAG_CARRY);}
-
-    *A = (unsigned char) diff;
-    
-}
-
-void ADDC (unsigned char *destination, unsigned char val, unsigned char carry){
-
-    unsigned int sum = *destination + val;
-    if (sum == 0) {FLAG_SET(FLAG_ZERO);} //Z
-    FLAG_CLEAR(FLAG_N);
-
-    unsigned char A = *destination & 0x0F; 
-    unsigned char B = val & 0x0F;
-
-    if ((A + B) > 0x0F) {FLAG_SET(FLAG_HALF);}
-    if( sum > 0xFF ) {FLAG_SET(FLAG_CARRY);}
-
-    sum += (FLAG_ISCARRY & carry);
-
-    *destination = (unsigned char)sum;
-
-}
-
-void DECRegB (unsigned char Opcode) {
-    switch(Opcode){
-        case 0x05:
-            SUBC(&registers.B, 1, 2);
-            break;
-        case 0x15:
-            SUBC(&registers.D, 1, 2);
-            break;
-        case 0x25:
-            SUBC(&registers.H, 1, 2);
-            break;
-        case 0x35:
-            unsigned char HLpointing = ReadByte(registers.HL);
-            unsigned char *HLpointer = &HLpointing;
-
-            SUBC(HLpointer, 1, 2);
-
-            WriteByte(registers.HL, *HLpointer);
-
-            break;
-
-        case 0x0D:
-            SUBC(&registers.C, 1, 2);
-            break;
-        case 0x1D:
-            SUBC(&registers.E, 1, 2);
-            break;
-        case 0x2D:
-            SUBC(&registers.L, 1, 2);
-            break;
-        case 0x3D:
-            SUBC(&registers.A, 1, 2);
-            break;
-
-    }
-}
-
-void DECRegS (unsigned char Opcode) {
-   
-    struct opcode Dec;
-    Dec.inst = Opcode;
-    char label[50];
-    sprintf(label, "Decreasing: 0x%04x by 1. r1 = 0x%04x", *topRowRegs[Dec.r1 - 1], Dec.r1);
-    CreateBox(label);
-    *topRowRegs[Dec.r1-1] -= 1;
-    //CHECK
-}
-
-void SUBC (unsigned char *destination, unsigned char val, unsigned char carry){
-
-    CreateBox("In SUBC");
-    //signs may or may nto work
-    signed int diff = *destination - val;
-    char label[50];
-    sprintf(label, "diff: %d, *destination: 0x%04x, val: 0x%04x", diff, *destination, val);
-    CreateBox(label);
-    if (diff == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}//Z
-    
-    FLAG_SET(FLAG_N);
-
-    unsigned char A = *destination & 0x0F; 
-    unsigned char B = val & 0x0F;
-
-    if((A - B) & 0x10){FLAG_SET(FLAG_HALF);}
-
-    //carry 2: dec, carry:0 no carry but CY, carry:1 carry and CY
-    switch(carry){
-        case 0:
-            if(diff < 0x0) {FLAG_SET(FLAG_CARRY);}
-            *destination = (unsigned char)diff;
-            break;
-        case 1:
-            if(diff < 0x0) {FLAG_SET(FLAG_CARRY);}
-            *destination = (unsigned char)diff - FLAG_ISCARRY;
-            break;
-        case 2: //dec
-            *destination = (unsigned char)diff;
-            break;
-    }
-
-}
-
-void RR (unsigned char Opcode) {
-
-    switch (Opcode){
-        case 0x7: //ROTATIONS
-            ROTATE(&registers.A, 0, 1);
-            break;
-
-        case 0x17:
-            ROTATE(&registers.A, 1, 1);
-            break;
-
-        case 0x27:
-            ROTATE(&registers.A, 0, 1);
-            break;
-
-        case 0x37:
-            ROTATE(&registers.A, 1, 0);
-            break;
-    }
-}
-
-void ROTATE (unsigned char *object, unsigned char carry, unsigned char direct){
-    //direct[0: right, 1: left]
-    //carry[0: none, 1:through carry]
-
-    if(direct){
-        unsigned char C = (*object & 0x80 || *object & 0x80);
-        if(carry) {unsigned char temp = C; C = (FLAG_ISCARRY); FLAG_SET(temp << 4);} else {FLAG_SET(C << 4);} //going through if 1
-        *object = (*object<<1) + (C);
-    } else {
-        unsigned char C = (*object & 0x01 || *object & 0x01);
-        if(carry) {unsigned char temp = C; C = (FLAG_ISCARRY); FLAG_SET(temp << 4);} else {FLAG_SET(C << 4);} //going through if 1
-        *object = (*object>>1) + (C<<7);
-    }
-
-    if (*object == 0) {FLAG_SET(FLAG_ZERO);}
-    FLAG_CLEAR(FLAG_N);
-    FLAG_CLEAR(FLAG_HALF);
-    CreateBox("After Rotate");
-
-}
-
-void ADDSP (unsigned char Opcode, signed char operand) {
-
-    unsigned char temp = registers.SP;
-
-    if (Opcode == 0xE8) {
-        if(operand > 0) {
-            ADDCS(&registers.SP, operand, 0);
-        } else {
-            SUB16(&registers.SP, (signed char) operand); //Fix later
-        }
-        
-    } else {
-        if(operand > 0) {
-            
-            ADDCS(&registers.SP, operand, 0);
-            registers.HL = registers.SP;
-            registers.SP = temp;
-
-        } else {
-            SUB16(&registers.SP, (signed char) operand); //Fix later
-            registers.HL = registers.SP;
-            registers.SP = temp;
-    }
-}
-}
-
-void ADDHL(unsigned char Opcode) {
-
-    struct opcode AddHL;
-    AddHL.inst = Opcode;
-
-    ADDCS(&registers.HL, *topRowRegs[AddHL.r1-1], 0);
-    
-}
-
-void ADDCS (unsigned short *destination, unsigned short val, unsigned char carry){
-
-
-    unsigned int sum = *destination + val;
-    if (sum == 0) {FLAG_SET(FLAG_ZERO);} //Z
-    FLAG_CLEAR(FLAG_N);
-
-    unsigned char A = *destination & 0xFF; 
-    unsigned char B = val & 0xFF;
-
-    if ((A + B) > 0xFF) {FLAG_SET(FLAG_HALF);}
-    if( sum > 0xFFFF ) {FLAG_SET(FLAG_CARRY);}
-
-    sum += (FLAG_ISCARRY & carry);
-
-    *destination = (unsigned char)sum;
-
-}
-
-void JUMPHL (void) {
-    char label[50];
-    sprintf(label, "After JMPHL, prev:%04x", registers.PC);
-    registers.PC = registers.HL;
-    CreateBox(label);
-}
-
-void JUMP8 (unsigned char Opcode, signed char offset) {
-
-    //NZ
-    if(Opcode == 0x20 && FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;} //subtract one cycle
-    //NC
-    if(Opcode == 0x30 && FLAG_ISSET(FLAG_CARRY)) {CreateBox("test fail");return;}
-    //Z
-    if(Opcode == 0x28 && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
-    //C
-    if(Opcode == 0x38 && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
-
-    char label[50];
-    sprintf(label, "After JMP8, prev:%04x", registers.PC);
-    registers.PC += offset; 
-    CreateBox(label);
-    
-    
-}
-
-void JUMP16 (unsigned char Opcode, unsigned short Address) {
-
-    //NZ
-    if(Opcode == 0xC2 && FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;} //subtract one cycle
-    //NC
-    if(Opcode == 0xD2 && FLAG_ISSET(FLAG_CARRY)) {CreateBox("test fail");return;}
-    //Z
-    if(Opcode == 0xCA && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
-    //C
-    if(Opcode == 0xDA && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
-
-    char label[50];
-    sprintf(label, "After JMP16, prev:%04x", registers.PC);
-    registers.PC = Address; 
-    CreateBox(label);
-}
-
-void CALL (unsigned char Opcode, unsigned short Address) {
-
-    //NZ
-    if(Opcode == 0xC4 && FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;} //subtract one cycle
-    //NC
-    if(Opcode == 0xD4 && FLAG_ISSET(FLAG_CARRY)) {CreateBox("test fail");return;}
-    //Z
-    if(Opcode == 0xCC && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
-    //C
-    if(Opcode == 0xDC && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
-
-
-    WriteStack(registers.PC);
-    registers.PC = Address;
-
-}
-
-void RET (unsigned char Opcode){
-
-    //NZ
-    if(Opcode == 0xC0 && FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;} //subtract one cycle
-    //NC
-    if(Opcode == 0xD0 && FLAG_ISSET(FLAG_CARRY)) {CreateBox("test fail");return;}
-    //Z
-    if(Opcode == 0xC8 && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
-    //C
-    if(Opcode == 0xD8 && !FLAG_ISSET(FLAG_ZERO)) {CreateBox("test fail");return;}
-
-    registers.PC = ReadStack();
-
-}
-
-void RETI (unsigned char Opcode) {
-    interrupt.master = 1;
-    RET(Opcode);
-}
-
-void RST (unsigned char Opcode) {
-
-    struct opcode rst;
-    rst.inst = Opcode;
-    unsigned char RSTAddr[8] = {0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38}; //Goes straight to these positions
-    CALL(0x00, RSTAddr[rst.r1]);
-
-}
-
-void POP (unsigned char Opcode) {
-
-    struct opcode pop;
-    pop.inst = Opcode;
-    *topRowRegs[pop.r1] = ReadStack();
-    
-}
-
-void PUSH (unsigned char Opcode) {
-
-    struct opcode push;
-    push.inst = Opcode;
-    WriteStack(*topRowRegs[push.r1]);
-    
-}
-
-void CB (unsigned char Opcode, unsigned char operand) {
-
-    struct opcode CB;
-    CB.inst = operand;
-
-    unsigned char direction;
-    unsigned char *BitRegs[8] = {&registers.B, &registers.C, &registers.D, &registers.E, &registers.H, &registers.L, NULL, &registers.A};
-
-    
-    if(CB.low < 0x08) {direction = 1;} else {direction = 0;}
-
-    unsigned char Bitnum;
-    if (CB.high > 0x3 && CB.high < 0x8) {
-        Bitnum = (CB.inst-0x4)/8;
-    } else if (CB.high > 0x7 && CB.high < 0xC){
-        Bitnum = (CB.inst-0x8)/8;
-    } else if (CB.high > 0xB){
-        Bitnum = (CB.inst-0xC)/8;
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    if(!renderer){
+        printf("Error: Failed to create renderer\nSDL Error: '%s'\n", SDL_GetError());
+        return 1;
     }
 
 
-    if(CB.r2 == 0x06) {
-        unsigned char HLpointing = ReadByte(registers.HL);
-        unsigned char *HLpointer = &HLpointing;
+    LoadRom();
+    Reset();
 
-        switch(CB.high) {
-            case 0x0:
-                ROTATE(HLpointer, 0, direction);
-                break;
-            case 0x1:
-                ROTATE(HLpointer, 1, direction);
-                break;
-            case 0x3:
-                SHIFT(*HLpointer, 0, direction);
-            case 0x4:
-            case 0x5:
-            case 0x6:
-            case 0x7: //BIT
-            
-                BIT(Bitnum, *HLpointer, 0);
-                break;
-            
-            case 0x8:
-            case 0x9:
-            case 0xA:
-            case 0xB: //RES
-                
-                *HLpointer = BIT(Bitnum, *HLpointer, 2);
-                break;
+    bool running = true;
+    while(running){
 
-            case 0xC:
-            case 0xD:
-            case 0xE:
-            case 0xF: //SET
-                *HLpointer = BIT(Bitnum, *HLpointer, 1);
-                break;
-        }
-        WriteByte(registers.HL, *HLpointer);
-        return;
-    }
+        SDL_Event event;
+        while(SDL_PollEvent(&event)){
 
-    switch(CB.high){
-                
-        case 0x0: //RLC, RRC    
-            ROTATE(BitRegs[CB.r2], 0, direction);
-            break;
+            switch(event.type){
+                case SDL_QUIT:
+                    running = false;
+                    break;
 
-        case 0x1: //wrap THROUGH CY
-            ROTATE(BitRegs[CB.r2], 1, direction);
-            break;
-
-        case 0x2: //SLA SRA
-            SHIFT(*BitRegs[CB.r2], 0, direction);
-            break;
-
-        case 0x3: //SWAP, SRL
-
-            if(CB.low < 0x08){ //SWAP
-                struct opcode RegSwap;
-                RegSwap.inst = *BitRegs[CB.r2];
-                *BitRegs[CB.r2] = ((RegSwap.low<<4) + (RegSwap.high));
-                return;
-
-            } else { //SHIFT
-
-                *BitRegs[CB.r2] = SHIFT(*BitRegs[CB.r2], 1, 0);
-                return;
-
+                default:
+                    break;
             }
 
-        case 0x4:
-        case 0x5:
-        case 0x6:
-        case 0x7: //BIT
-           
-            BIT(Bitnum, *BitRegs[CB.r2], 0);
-            break;
-        
-        case 0x8:
-        case 0x9:
-        case 0xA:
-        case 0xB: //RES
-            
-            *BitRegs[CB.r2] = BIT(Bitnum, *BitRegs[CB.r2], 2);
-            break;
-
-        case 0xC:
-        case 0xD:
-        case 0xE:
-        case 0xF: //SET
-            *BitRegs[CB.r2] = BIT(Bitnum, *BitRegs[CB.r2], 1);
-            break;
-
-            
-    }
-}
-
-unsigned char SHIFT (unsigned char X, unsigned char logical, unsigned char direct) {
-    //direct[0: right, 1: left]
-    // logic/arithmetic[0: arithmetic, 1:logical]
-
-    unsigned char C;
-
-    if(direct){ //left
-        C = ((X & 0x80) && (X & 0x80));
-
-        if(!C) {
-            FLAG_CLEAR(FLAG_CARRY);
-        } else {
-            FLAG_SET(FLAG_CARRY);
         }
-        X <<= 1;
-
-    } else { //right
-
-        C = ((X & 0x01) && (X & 0x01));
-
-        if(!C) {
-            FLAG_CLEAR(FLAG_CARRY);
-        } else {
-            FLAG_SET(FLAG_CARRY);
-        }
-
-        if(!logical) {C = (X & 0x08);} else {C = 0;} //changes from 0 if arthmetic
-        X = ((X>>1) + C);
         
-    }
+         
+        Update(); //assuming this takes and insignificant amount of time
+        Sleep(1000); //update 60 times a second
 
-    FLAG_SET((X && X) * 0x80);
-    FLAG_CLEAR(FLAG_N); //LOOK
-    FLAG_CLEAR(FLAG_HALF);
-    return X;
-
-}
-
-unsigned char BIT (unsigned char bit, unsigned char byte, unsigned char OP){
-    
-    //OP(operation): 0 = bit, 1 = set, 2 = res
-    //No need for clocks here
-    // xx b r [r(HL) = 110]
-
-    //sending pointer
-    switch(OP){
-        case 0:
-            unsigned char test = (byte & (0x01 << bit)); //Moves over until it reaches the num and ANDs it
-
-            FLAG_SET((test && test) * 0x80);
-            FLAG_CLEAR(FLAG_N); //LOOK
-            FLAG_SET(FLAG_HALF);
-            break;
-
-        case 1:
-
-            byte |= (0x01 << bit);
-            break;
-
-        case 2:
-            byte &= ~(0x01 << bit);
-            break;
-
-    }
-    return byte;
-
-}
-
-
-
-
-void Reset (void) {
-
-    registers.A = 0x01;
-	registers.F = 0x00; //If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
-	registers.B = 0x00; //for the bmg pokemon red start
-	registers.C = 0x14;
-	registers.D = 0x00;
-	registers.E = 0x00;
-	registers.H = 0xC0;
-	registers.L = 0x60;
-	registers.SP = 0xfffe;
-	registers.PC = 0x101;
-	
-	interrupt.master = 0;
-	interrupt.enable = 0;
-	interrupt.flag = 0;
-
-     
-
-}
-
-void RequestInterrupt (int val) {
-
-    switch (val)
-    {
-    case 0:
-        interrupt.FVBlank = 1;
-        break;
-    case 1:
-        interrupt.FLCD = 1;
-        break;
-    case 2:
-        interrupt.FTimer = 1;
-        break;
-    case 3:
-        interrupt.FSerial = 1;
-        break;
-    case 4:
-        interrupt.FJoypad = 1;
-        break;
-
-    }
-
-    CheckInterrupts();
-
-}
-
-void CheckInterrupts (void) {
         
-    //halt and stop
-
-    if ((interrupt.flag) && (interrupt.master))
-    {
-        HandleInterrupt();
-    }
-
-}
-
-
-void HandleInterrupt (void) {
-
-    unsigned short InterruptAddress[5] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
-
-    unsigned char priority;
-    unsigned char currentFlag;
-
-    if (interrupt.FVBlank) {
-        currentFlag = 0x01;
-        priority = 1;
-    } else if (interrupt.FLCD) {
-        currentFlag = 0x02;
-        priority = 2;
-    } else if (interrupt.FTimer) {
-        currentFlag = 0x04;
-        priority = 3;
-    } else if (interrupt.FSerial) {
-        currentFlag = 0x08;
-        priority = 4;
-    } else {
-        currentFlag = 0x10;
-        priority = 5;
-    }
-
-    if(interrupt.enable & currentFlag) {
-
-        interrupt.master = 0;
-        interrupt.flag &= ~currentFlag;
-        interrupt.enable &= ~currentFlag;
-
-        CALL(0x00, InterruptAddress[priority]);
-
-    }//interrupt call
-    
-}
-
-
-int main (void) {
-
-    m_timercounter = CLOCKSPEED / GetFrequency(); //number of cycles per incrementation
-    
-    Reset(); //init
-    LoadRom();
-
-    while(1){
-        Update();
-
-    }
-    
-}
-
-void Update (void) { //gpu step
-
-    const int MAXCYCLES = 69905;
-    int currentcycles = 0;
-
-    while (currentcycles < MAXCYCLES) {
-
-        int cycles = realtimeDebug();
-        currentcycles += cycles;
-        UpdateGraphics(cycles);  
-        UpdateTiming(cycles);
-        CheckInterrupts();
-
-    }
-
-    //Render ();
-}
-
-
-void UpdateTiming (int cycles) {
-
-    UpdateDivider (cycles);
-
-    if(IsClockEnabled()) {
-
-        m_timercounter -= cycles;
-
-        if (m_timercounter <= 0) {
+        // CreatePixelStream(0x8010);
+        // DrawTile(&Stream, renderer, 0, 0);
+        
+        // SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        // SDL_RenderPresent(renderer);
                 
-            m_timercounter = CLOCKSPEED / GetFrequency();
-        
-        if (timer.TIMA == 255)
-        {
-            timer.TIMA = timer.TMA;
-
-            RequestInterrupt(2) ;
-        }
-        else
-        {
-            timer.TIMA++;
-        }
-
-        }
     }
-    
 
-}
-
-void UpdateDivider (int cycles) {
-
-    m_dividercounter -= cycles;
-
-    if (m_dividercounter <= 0){
-
-        m_dividercounter = 256;
-        timer.DIV++;
-
-    }
+    return 0;
     
 }
 
-int IsClockEnabled () {
-    return (timer.TAC & 0x04);
+/*
+Read the first 16bytes 
+reconstruct a sprite image 
+unsigned char tile[16][]
+*/
+
+void CreatePixelStream (unsigned short Address) {
+
+
+    for (int i = 0; i < 8; i++)
+    {
+
+        unsigned char byte1 = ReadByte(Address + 2*i);
+        unsigned char byte2 = ReadByte(Address + 2*i + 1);
+
+        for (int j = 0; j < 8; j++)
+        {
+            int bit1 = (byte1 & (1 << (7-j)));
+            int bit2 = (byte2 & (1 << (7-j)));
+
+            int colorVal = 3;
+            
+            if (bit1 && bit2) 
+            {
+
+                colorVal = 0;
+
+            } else if (bit2) {
+
+                colorVal = 2;
+
+            } else if (bit1) {
+
+                colorVal = 1;
+
+            } 
+
+            Stream[i*8 + j] = (unsigned char) colorVal;   
+        }
+
+    }
+
+    
 }
 
-int GetFrequency() {
-    int frequency;
-    frequency = (timer.TAC & 0x03);
-    switch (frequency) {
-        case 0:
-            return 1024;
-        case 1:
-            return 16;
-        case 2:
-            return 64;
-        case 3:
-            return 256;
+void DrawTile (unsigned char * stream, SDL_Renderer * render, int x_offset, int y_offset)
+{
+    int Pixel_width = SCREEN_WIDTH / 16;
+    int Pixel_height = SCREEN_HEIGHT / 16;
+
+    SDL_Rect * Pixels = malloc(64 * sizeof(SDL_Rect));
+
+    for (int i = 0; i < 8; i++) //y
+    {
+        for (int j = 0; j < 8; j++) //x
+        {
+
+            Pixels[i*8 + j].x = (x_offset * SCREEN_WIDTH/2) + j * Pixel_width;
+            Pixels[i*8 + j].y = (y_offset * SCREEN_HEIGHT/2) + i * Pixel_height;
+
+            Pixels[i*8 + j].h = Pixel_height;
+            Pixels[i*8 + j].w = Pixel_width;
+            
+        }
+
+    }
+
+    for (int k = 0; k < 64; k++) {
+
+        unsigned char r;
+        unsigned char g;
+        unsigned char b;
+
+
+        switch(stream[k]){
+            case 0:
+
+                r = g = b = 0;
+                break;
+
+            case 1:
+
+                r = g = b = 75;
+                break;
+
+            case 2:
+
+                r = g = b = 150;
+                break;
+
+            case 3:
+
+                r = g = b = 255;
+                break;
+
+        }
+
+        SDL_SetRenderDrawColor(render, r, g, b, 255);
+        SDL_RenderFillRect(render, &Pixels[k]);
+
     }
 }
+
+

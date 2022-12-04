@@ -9,7 +9,7 @@
  //every dot and their hue
 
 struct LCD lcd;
-int ScanlineCounter = 456; //456 cycles per scan line
+int ScanlineCounter = 456 + 35; //456 cycles per scan line, there is a 146 vblank buffer
 
 void UpdateGraphics (int cycles) {
 
@@ -38,7 +38,7 @@ void UpdateGraphics (int cycles) {
 
         } else if (lcd.LY < 144) {
             
-            // DrawScanline();
+            DrawScanline(); //this will add a line to the render buffer
         }
 
     } 
@@ -46,11 +46,11 @@ void UpdateGraphics (int cycles) {
 }
 
 int IsLcdOn (void) {
-    return (lcd.control && 0x80);
+    return (lcd.control & 0x80);
 }
 
 void SetLCDstatus (void) {
-
+    //leave the 7th bit
     if (!IsLcdOn()) {
 
         //lcd off
@@ -72,19 +72,19 @@ void SetLCDstatus (void) {
         mode = 1;
         lcd.status &= 0xFC;
         lcd.status |= 0x01;
-        ReqInt = (lcd.status && 0x08); // bit 4
+        ReqInt = (lcd.status & 0x10); // bit 4
 
-    } else {
+    } else if (ScanlineCounter < 456){ //to buffer in the beginning 
 
         int mode2bounds = 456-80 ;
         int mode3bounds = mode2bounds - 172 ;
 
-        if(ScanlineCounter >= mode2bounds) {
+        if(ScanlineCounter >= mode2bounds ) {
 
             mode = 2;
             lcd.status &= 0xFC;
             lcd.status |= 0x02; //searching sprite attributes
-            ReqInt = (lcd.status && 0x10); //bit 5
+            ReqInt = (lcd.status & 0x20); //bit 5
 
         } else if (ScanlineCounter >= mode3bounds) {
 
@@ -97,19 +97,24 @@ void SetLCDstatus (void) {
 
             mode = 0;
             lcd.status &= 0xFC;
-            ReqInt = (lcd.status && 0x04); //Hblank
+            ReqInt = (lcd.status & 0x08); //Hblank
 
         }
 
-        if (RequestInterrupt && (currentMode != mode)) {
 
+        if (ReqInt && (currentMode != mode)) {
+            printf("requested");
             RequestInterrupt(1); //stat interrupt
         }
 
         if (lcd.LY == lcd.LYC) {
-            if(lcd.status && 0x20) {
+            lcd.status |= 0x04;
+
+            if(lcd.status & 0x40) { //bit 6
+                CreateBox("LYC interrupt.");
                 RequestInterrupt(1);
-            }
+            } else {}
+
         } else {
             lcd.status &= (0xFB); //everything but second bit
         }
@@ -117,5 +122,16 @@ void SetLCDstatus (void) {
 
     }
 
+}
+
+void DrawScanline(void) {
+
+    if(lcd.control & 0x01) {
+        RenderTiles();
+    } 
+    
+    if (lcd.control & 0x02) {
+        RenderSprites();
+    }
 }
 

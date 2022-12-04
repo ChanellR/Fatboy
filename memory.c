@@ -19,6 +19,7 @@ unsigned char ROMBANKS[64 * 0x4000]; //4000 - 7FFF
 
 unsigned char RomBankLo = 0x01;
 unsigned char RomBankHi = 0x0;
+unsigned char currentRomBank;
 
 unsigned char VRAM[0x2000]; //8000-9FFF
 //A000-BFFF
@@ -67,7 +68,7 @@ void LoadRom (void){
 
 unsigned char ReadByte (unsigned short Address) {
 
-    unsigned char currentRomBank = ((RomBankHi <<5) | (RomBankLo));
+    currentRomBank = ((RomBankHi <<5) | (RomBankLo));
     if (currentRomBank == 0) {currentRomBank++;}
 
     unsigned char output;
@@ -164,7 +165,7 @@ unsigned char ReadByte (unsigned short Address) {
 
 void WriteByte (unsigned short Address, unsigned char value) {
 
-    unsigned char currentRomBank = ((RomBankHi <<5) | (RomBankLo));
+    currentRomBank = ((RomBankHi <<5) | (RomBankLo));
     if (currentRomBank == 0) {currentRomBank++;}
 
     if (Address <= 0x1FFF){ //RAM ENABLE
@@ -263,11 +264,11 @@ void WriteByte (unsigned short Address, unsigned char value) {
             break;
         
         case 0xFF40:
-            CreateBox("Writ eto lcd.control");
+            CreateBox("Write to lcd.control");
              lcd.control = value;
         case 0xFF41:
             CreateBox("Write to lcd.status");
-             lcd.status = 0;
+            lcd.status = 0x80;
 
         case 0xFF42:
             lcd.SCY = value;
@@ -349,4 +350,5 @@ void DoDMATransfer(unsigned char Addr)
      WriteByte(0xFE00+i, ReadByte(address+i));
 
    }
+   CreateBox("DMA Transfer");
 }

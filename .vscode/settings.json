@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "header.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "stdint.h": "c",
+        "*.dll": "c"
     }
 }

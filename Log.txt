@@ -1,0 +1,51 @@
+Read byte 0x20 from (0x006f) 
+instruction: 0xFE Operand: 0x0091 
+OPID: -2, cycles: 2
+
+AF: 0x2D70
+BC: 0x0014
+DE: 0x0000
+HL: 0xC060
+SP: 0xFFFC
+PC : 0x0070
+
+IME: 0x00
+IE: 0x00
+IF: 0x02
+LY: 45, LYC: 0, DIV: 80 
+
+Try again: LogMemory, continue: +1
+
+
+
+Notes:
+    pass the loop by fixing LY  
+    Read codeslinger to really figure out where it reads from 
+    go through the tests
+    Take a nice break. 
+
+
+Parts:
+    Instruction set:
+        reading and accurately recognizing instructions
+        functioning incstructions that are up to par with an actual machine
+        I still need to factor in cycles when the jumps don't go through
+    Timing:
+        Can be synced up with the cycle processing to emulate true Timing
+        should always just be working depending on the settings, not hard to implement
+    Interrupts:
+        I have the destinations for jumps active but I need to be able to recognize the 
+            changes acutally. Make sure the enable's function. 
+    LCD:
+        Need to understand better how the modes(vblank, etc.) actually function and what
+            everything else should be doing. 
+
+
+First mode of agenda:
+    Fix the Ly to make sure it's scaling when it's supposed to be. 
+
+Stat:
+    searching OAM: 38 cnt
+    Loading to LCD: 76 cnt, (actually drawing)
+    Hblank: 100 cnt, 
+    Vblank: 

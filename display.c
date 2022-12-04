@@ -9,7 +9,7 @@
 
 
 unsigned char instruction;
-int instSkips;
+int instSkips = 1;
 unsigned short operand = 0;
 int currentlyskipping = 1;
 
@@ -19,19 +19,8 @@ int CreateBox(char *label);
 int realtimeDebug(void) {
 	
 	int output;
-    // unsigned short Breakpoint = 0x1F7D;
     
-    // if (instSkips) {
-    //     instSkips--;
-    // }
-
-    // if(registers.PC == Breakpoint) {
-    //     currentlyskipping = 0;
-    // }
-
-    // if(currentlyskipping) {
-    //     instSkips++;
-    // }
+    
 
    
 
@@ -84,8 +73,25 @@ int realtimeDebug(void) {
             break;
 
     }
-	
-  
+
+    //only after op
+    unsigned short Breakpoint = 0x0061;
+    
+	if (instSkips) {
+        instSkips--;
+    }
+
+    if(registers.PC == Breakpoint) {
+        currentlyskipping = 0;
+    }
+
+    if(currentlyskipping) {
+        instSkips++;
+    }
+
+    CreateBox("After Op");
+    if(instSkips == 0) {instSkips = 1;}
+
 	// if(instructions[instruction].operand_length) debugMessageP += 
 	// else debugMessageP += sprintf(debugMessageP, instruction);
     
@@ -99,6 +105,7 @@ int CreateBox (char *label){
     char debugMessage[5000];
     char *debugMessageP = debugMessage;
 
+    
     if (instSkips) {
         //skip if there are remaining skips
         return 0;
@@ -115,14 +122,23 @@ int CreateBox (char *label){
 	debugMessageP += sprintf(debugMessageP, "IE: 0x%02X\n", interrupt.enable);
 	debugMessageP += sprintf(debugMessageP, "IF: 0x%02X\n", interrupt.flag);
     debugMessageP += sprintf(debugMessageP, "LY: %d, LYC: %d, DIV: %d \n", lcd.LY, lcd.LYC, timer.DIV);
-	
+    debugMessageP += sprintf(debugMessageP, "lcdc: %X, stat: %X, Bank: %d\n", lcd.control, lcd.status, currentRomBank);
+    debugMessageP += sprintf(debugMessageP, "TIMA: %04X, TMA: %04X, TAC: %04X\n", timer.TIMA, timer.TMA, timer.TAC);
+	debugMessageP += sprintf(debugMessageP, "scanline_counter: %d, Frame: %d", ScanlineCounter, frame);
+
 	debugMessageP += sprintf(debugMessageP, "\nTry again: LogMemory, continue: +1\n");
 	
+    // FILE *ptr;
+    // ptr = fopen("Log.txt","w");  
+    // // fwrite(ROMBANK0, sizeof(ROMBANK0), 1, ptr);
+    // fprintf(ptr, debugMessage); //ill figure out how to displace it later
+    // fclose(ptr);
+    
     int response = MessageBox(NULL, debugMessage, "Debug Step", MB_DEFBUTTON3 | MB_CANCELTRYCONTINUE | MB_ICONINFORMATION);
     
+
     if (response == 10) { //try again 10 cancel: 2 continue: 11
         //Log Memory
-        
         LogMemory();
         instSkips = 5;
     } 
@@ -131,7 +147,6 @@ int CreateBox (char *label){
         exit(0);
     }
 
-    return response;
 }
 	
 

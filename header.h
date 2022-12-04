@@ -19,7 +19,9 @@
 
 extern int m_timercounter;
 extern int m_dividercounter;
-
+extern int ScanlineCounter;
+extern int frame;
+extern int instSkips;
 
 struct registers {
 
@@ -197,3 +199,5 @@ void UpdateTiming (int cycles);
 void RequestInterrupt(int val);
 void LoadRom (void);
 void Update (void);
+
+void Reset (void);
