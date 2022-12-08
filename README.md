@@ -2,10 +2,15 @@
 
 References/Materials:
 http://www.codeslinger.co.uk/index.html
+
 https://gekkio.fi/files/gb-docs/gbctr.pdf
+
 EmuDev Discord
+
 https://gbdev.io/pandocs/
+
 https://github.com/CTurt/Cinoop
+
 
 I've decided to develop a gameboy emulator in order to become more engaged in the subject of emulation and eventually move on to contributing to projects
 like Yuzu and Ryujinx. 
