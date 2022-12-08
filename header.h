@@ -16,12 +16,14 @@
 #define FLAG_CLEAR(x) (registers.F &= ~x)
 
 
-
+extern int currentcycles;
 extern int m_timercounter;
 extern int m_dividercounter;
 extern int ScanlineCounter;
 extern int frame;
 extern int instSkips;
+extern unsigned short Breakpoint;
+extern int currentlyskipping;
 
 struct registers {
 

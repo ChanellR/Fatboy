@@ -6,6 +6,7 @@
 #include "display.h"
 #include "gpu.h"
 
+
 #define CLOCKSPEED 4194304
 // #define TIMA 0xFF05
 // #define TMA 0xFF06
@@ -34,7 +35,7 @@ const struct Instruction instructions[256] = {
     {-1, RR, 1},        // 0x07
     {-3, load16bit, 5}, // 0x08
     {-1, ADDHL, 2},     // 0x09
-    {-1, loadRegB, 2},  // 0x0a
+    {-1, loadRegS, 2},  // 0x0a
     {-1, DECRegS, 2},   // 0x0b
     {-1, INCRegB, 1},   // 0x0c
     {-1, DECRegB, 1},   // 0x0d
@@ -51,7 +52,7 @@ const struct Instruction instructions[256] = {
     {-1, RR, 1},        // 0x07
     {-2, JUMP8, 3},     // 0x08
     {-1, ADDHL, 2},     // 0x09
-    {-1, loadRegB, 2},  // 0x0a
+    {-1, loadRegS, 2},  // 0x0a
     {-1, DECRegS, 2},   // 0x0b
     {-1, INCRegB, 1},   // 0x0c
     {-1, DECRegB, 1},   // 0x0d
@@ -68,7 +69,7 @@ const struct Instruction instructions[256] = {
     {0, DAA, 1},        // 0x07
     {-2, JUMP8, 3},     // 0x08
     {-1, ADDHL, 2},     // 0x09
-    {-1, loadRegB, 2},  // 0x0a
+    {-1, loadRegS, 2},  // 0x0a
     {-1, DECRegS, 2},   // 0x0b
     {-1, INCRegB, 1},   // 0x0c
     {-1, DECRegB, 1},   // 0x0d
@@ -85,7 +86,7 @@ const struct Instruction instructions[256] = {
     {0, SCF, 1},        // 0x07
     {-2, JUMP8, 3},     // 0x08
     {-1, ADDHL, 2},     // 0x09
-    {-1, loadRegB, 2},  // 0x0a
+    {-1, loadRegS, 2},  // 0x0a
     {-1, DECRegS, 2},   // 0x0b
     {-1, INCRegB, 1},   // 0x0c
     {-1, DECRegB, 1},   // 0x0d
@@ -348,6 +349,7 @@ void nop(void) {}
 void STOP(void)
 {
     stopped = 1;
+    printf("Stopped");
     // Reset, start at 0000h
     // input, start after instruction
 }
@@ -355,37 +357,54 @@ void STOP(void)
 void HALT(void)
 {
     stopped = 2;
+    if (!interrupt.flag){ //if no interrupts, move backwards
+        registers.PC--;
+    }
     // Halted
 }
 
 void DAA(void)
 {
     // note: assumes a is a uint8_t and wraps from 0xff to 0
+    signed char additive;
+    unsigned char done = 0;
+
     if (!FLAG_ISSET(FLAG_N))
     { // after an addition, adjust if (half-)carry occurred or if result is out of bounds
-        if (FLAG_ISSET(FLAG_CARRY) || registers.A > 0x99)
+        if ( ( ( (registers.A & 0xF0) > 0x80 ) && ((registers.A & 0x0F) > 0x9)) )
         {
-            registers.A += 0x60;
+            additive += 0x66;
+            done = 1;
             FLAG_SET(FLAG_CARRY);
         }
-        if (FLAG_ISSET(FLAG_HALF) || (registers.A & 0x0f) > 0x09)
+            
+        
+        if ( (FLAG_ISSET(FLAG_CARRY) || ((registers.A & 0XF0) > 0x90)) && !done)
+        {   //hardcode 9-F and A-F as 66
+            additive += 0x60;
+            FLAG_SET(FLAG_CARRY);
+        }
+        if ( (FLAG_ISSET(FLAG_HALF) || ((registers.A & 0x0F) > 0x09)) && !done)
         {
-            registers.A += 0x6;
+            additive += 0x6;
         }
     }
     else
     { // after a subtraction, only adjust if (half-)carry occurred
         if (FLAG_ISSET(FLAG_CARRY))
         {
-            registers.A -= 0x60;
+            additive -= 0x60;
         }
         if (FLAG_ISSET(FLAG_HALF))
         {
-            registers.A -= 0x6;
+            additive -= 0x6;
         }
+        if(additive <= -0x60) {FLAG_SET(FLAG_CARRY);}
     }
     // these flags are always updated
-    FLAG_SET((registers.A && registers.A) * 0x80); // the usual z flag
+    registers.A += additive;
+
+    if(registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} // the usual z flag
     FLAG_CLEAR(FLAG_HALF);                         // h flag is always cleared
 
     CreateBox("after DAA");
@@ -644,10 +663,17 @@ void load8bit(unsigned char Opcode, unsigned char operand)
     switch (Opcode)
     {
     case 0xE0:
+        
         WriteByte(0xFF00 + operand, registers.A);
         break;
     case 0xF0:
         registers.A = ReadByte(0xFF00 + operand);
+        break;
+    case 0xE2:
+        WriteByte(0xFF00 + registers.C, registers.A);
+        break;
+    case 0xF2:
+        registers.A = ReadByte(0xFF00 + registers.C);
         break;
 
     case 0x06:
@@ -786,36 +812,36 @@ void INCRegB(unsigned char Opcode)
     switch (Opcode)
     {
     case 0x04:
-        ADDC(&registers.B, 1, 0);
+        ADDC(&registers.B, 1, 2);
         break;
     case 0x14:
-        ADDC(&registers.D, 1, 0);
+        ADDC(&registers.D, 1, 2);
         break;
     case 0x24:
-        ADDC(&registers.H, 1, 0);
+        ADDC(&registers.H, 1, 2);
         break;
     case 0x34:
         // crazy solution
         unsigned char HLpointing = ReadByte(registers.HL);
         unsigned char *HLpointer = &HLpointing;
 
-        ADDC(HLpointer, 1, 0);
+        ADDC(HLpointer, 1, 2);
 
         WriteByte(registers.HL, *HLpointer);
 
         break;
 
     case 0x0C:
-        ADDC(&registers.C, 1, 0);
+        ADDC(&registers.C, 1, 2);
         break;
     case 0x1C:
-        ADDC(&registers.E, 1, 0);
+        ADDC(&registers.E, 1, 2);
         break;
     case 0x2C:
-        ADDC(&registers.L, 1, 0);
+        ADDC(&registers.L, 1, 2);
         break;
     case 0x3C:
-        ADDC(&registers.A, 1, 0);
+        ADDC(&registers.A, 1, 2);
         break;
     }
 }
@@ -918,32 +944,39 @@ void SUB16(unsigned short *A, unsigned char B)
         FLAG_CLEAR(FLAG_CARRY);
     }
 
-    *A = (unsigned char)diff;
+    *A = (unsigned short)diff;
 }
 
 void ADDC(unsigned char *destination, unsigned char val, unsigned char carry)
 {
-
+    //Carry 2 : dont impact Carry
     unsigned int sum = *destination + val;
-    if (sum == 0)
-    {
-        FLAG_SET(FLAG_ZERO);
-    } // Z
+
     FLAG_CLEAR(FLAG_N);
 
     unsigned char A = *destination & 0x0F;
     unsigned char B = val & 0x0F;
 
-    if ((A + B) > 0x0F)
+    if ((A + B + (FLAG_ISCARRY && (carry == 1))) > 0x0F)
     {
         FLAG_SET(FLAG_HALF);
-    }
-    if (sum > 0xFF)
-    {
-        FLAG_SET(FLAG_CARRY);
+    } else FLAG_CLEAR(FLAG_HALF);
+
+    sum += (FLAG_ISCARRY && (carry == 1));
+
+    if(carry != 2){ //doesnt change on inc
+            if (sum > 0xFF)
+        {
+            FLAG_SET(FLAG_CARRY);
+        } else FLAG_CLEAR(FLAG_CARRY);
     }
 
-    sum += (FLAG_ISCARRY & carry);
+    if ((unsigned char)sum == 0) // needs to be checked after carry operation if need
+    {
+        FLAG_SET(FLAG_ZERO);
+    } else {
+        FLAG_CLEAR(FLAG_ZERO);
+    }
 
     *destination = (unsigned char)sum;
 }
@@ -1056,7 +1089,7 @@ void SUBC(unsigned char *destination, unsigned char val, unsigned char carry)
         *destination = (unsigned char)diff - FLAG_ISCARRY;
         break;
     case 2: // dec
-        FLAG_CLEAR(FLAG_CARRY);
+
         *destination = (unsigned char)diff;
         break;
     }
@@ -1069,18 +1102,22 @@ void RR(unsigned char Opcode)
     {
     case 0x7: // ROTATIONS
         ROTATE(&registers.A, 0, 1);
+        FLAG_CLEAR(FLAG_ZERO);
         break;
 
     case 0x17:
         ROTATE(&registers.A, 1, 1);
+        FLAG_CLEAR(FLAG_ZERO);
         break;
 
-    case 0x27:
-        ROTATE(&registers.A, 0, 1);
+    case 0x0F:
+        ROTATE(&registers.A, 0, 0);
+        FLAG_CLEAR(FLAG_ZERO);
         break;
 
-    case 0x37:
-        ROTATE(&registers.A, 1, 0);
+    case 0x1F:
+        ROTATE(&registers.A, 1, 0); //RRA
+        FLAG_CLEAR(FLAG_ZERO);
         break;
     }
 }
@@ -1090,41 +1127,46 @@ void ROTATE(unsigned char *object, unsigned char carry, unsigned char direct)
     // direct[0: right, 1: left]
     // carry[0: none, 1:through carry]
 
+    unsigned char temp;
+
     if (direct)
     {
-        unsigned char C = (*object & 0x80 || *object & 0x80);
-        if (carry)
+        unsigned char C = ((*object & 0x80) > 0);
+        if (carry) //C is coming from the byte
         {
-            unsigned char temp = C;
-            C = (FLAG_ISCARRY);
-            FLAG_SET(temp << 4);
+            temp = C; //put last bit of byte into CY and CY into byte
+            C = (FLAG_ISCARRY > 0);
+            if(temp) {FLAG_SET(FLAG_CARRY);} else {FLAG_CLEAR(FLAG_CARRY);}
         }
         else
         {
-            FLAG_SET(C << 4);
+            if(C) {FLAG_SET(FLAG_CARRY);} else {FLAG_CLEAR(FLAG_CARRY);}
+
         } // going through if 1
-        *object = (*object << 1) + (C);
+        *object = ((*object << 1) | (C));
     }
     else
     {
-        unsigned char C = (*object & 0x01 || *object & 0x01);
+        unsigned char C = ((*object & 0x01) > 0);
         if (carry)
         {
-            unsigned char temp = C;
-            C = (FLAG_ISCARRY);
-            FLAG_SET(temp << 4);
+            temp = C;
+            C = (FLAG_ISCARRY > 0);
+            if(temp) {FLAG_SET(FLAG_CARRY);} else {FLAG_CLEAR(FLAG_CARRY);}
         }
         else
         {
-            FLAG_SET(C << 4);
+            if(C) {FLAG_SET(FLAG_CARRY);} else {FLAG_CLEAR(FLAG_CARRY);}
         } // going through if 1
-        *object = (*object >> 1) + (C << 7);
+        *object = ((*object >> 1) | (C << 7));
     }
 
     if (*object == 0)
     {
         FLAG_SET(FLAG_ZERO);
-    }
+
+    } else {FLAG_CLEAR(FLAG_ZERO);}
+
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     CreateBox("After Rotate");
@@ -1132,8 +1174,34 @@ void ROTATE(unsigned char *object, unsigned char carry, unsigned char direct)
 
 void ADDSP(unsigned char Opcode, signed char operand)
 {
+    int go = 0;
+    if (registers.SP == 0x000F) 
+    {
+        go = 1;
+    }
 
-    unsigned char temp = registers.SP;
+    unsigned short temp = registers.SP;
+
+    unsigned char D8 = (unsigned char)operand;
+    signed char S8 = ((D8&127)-(D8&128));
+
+    unsigned short SP = registers.SP + S8;
+
+    
+    if (S8 >= 0) 
+    {
+
+        if( ((registers.SP & 0xFF) + S8 ) > 0xFF ) {FLAG_SET(FLAG_CARRY);} else {FLAG_CLEAR(FLAG_CARRY);}
+        if( ((registers.SP & 0xF) + (S8 & 0xF) ) > 0xF ) {FLAG_SET(FLAG_HALF);} else {FLAG_CLEAR(FLAG_HALF);}
+
+    } 
+    else 
+    {
+        if( (SP & 0xFF) <= (registers.SP & 0xFF) ) {FLAG_SET(FLAG_CARRY);} else {FLAG_CLEAR(FLAG_CARRY);}
+        if( (SP & 0xF) <= (registers.SP & 0xF) ) {FLAG_SET(FLAG_HALF);} else {FLAG_CLEAR(FLAG_HALF);}
+    }
+
+    unsigned char tempFlags = registers.F;
 
     if (Opcode == 0xE8)
     {
@@ -1143,7 +1211,7 @@ void ADDSP(unsigned char Opcode, signed char operand)
         }
         else
         {
-            SUB16(&registers.SP, (signed char)operand); // Fix later
+            SUB16(&registers.SP, (-1 * operand)); // Fix later
         }
     }
     else
@@ -1157,11 +1225,27 @@ void ADDSP(unsigned char Opcode, signed char operand)
         }
         else
         {
-            SUB16(&registers.SP, (signed char)operand); // Fix later
+
+            SUB16(&registers.SP, (-1 * operand)); // Fix later
             registers.HL = registers.SP;
             registers.SP = temp;
+
         }
+
     }
+
+    //calculation of Half and Carry from 
+
+    registers.F = tempFlags; //return it to before
+
+    FLAG_CLEAR(FLAG_ZERO);
+    FLAG_CLEAR(FLAG_N);
+    if(go)
+    {
+        printf("new SP: %04X S8: %d PC: %04X, F: %02X\n",registers.SP, S8, registers.PC, registers.F);
+        
+    }
+
 }
 
 void ADDHL(unsigned char Opcode)
@@ -1169,35 +1253,38 @@ void ADDHL(unsigned char Opcode)
 
     struct opcode AddHL;
     AddHL.inst = Opcode;
-
+    unsigned temp = (registers.F & 0x80);
     ADDCS(&registers.HL, *topRowRegs[AddHL.r1 - 1], 0);
+    if(temp) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} //do no change unto Z.
+
 }
 
 void ADDCS(unsigned short *destination, unsigned short val, unsigned char carry)
 {
 
     unsigned int sum = *destination + val;
-    if (sum == 0)
+    if ((unsigned short)sum == 0)
     {
         FLAG_SET(FLAG_ZERO);
-    } // Z
+    } else FLAG_CLEAR(FLAG_ZERO);
+
     FLAG_CLEAR(FLAG_N);
 
-    unsigned char A = *destination & 0xFF;
-    unsigned char B = val & 0xFF;
+    unsigned short A = *destination & 0x0FFF;
+    unsigned short B = val & 0x0FFF;
 
-    if ((A + B) > 0xFF)
+    if ((A + B + (FLAG_ISCARRY && (carry == 1))) > 0xFFF)
     {
         FLAG_SET(FLAG_HALF);
-    }
+    } else FLAG_CLEAR(FLAG_HALF);
     if (sum > 0xFFFF)
     {
         FLAG_SET(FLAG_CARRY);
-    }
+    } else FLAG_CLEAR(FLAG_CARRY);
 
-    sum += (FLAG_ISCARRY & carry);
+    sum += (FLAG_ISCARRY && (carry == 1));
 
-    *destination = (unsigned char)sum;
+    *destination = (unsigned short)sum;
 }
 
 void JUMPHL(void)
@@ -1322,37 +1409,41 @@ void CALL(unsigned char Opcode, unsigned short Address)
 
 void RET(unsigned char Opcode)
 {
+    switch (Opcode){
+        case 0xC0:
+            if(!FLAG_ISZERO){
 
-    // NZ
-    if (Opcode == 0xC0 && FLAG_ISSET(FLAG_ZERO))
-    {
-        CreateBox("test fail");
-        currentcycles -= 3;
-        return;
-    } // subtract one cycle
-    // NC
-    if (Opcode == 0xD0 && FLAG_ISSET(FLAG_CARRY))
-    {
-        CreateBox("test fail");
-        currentcycles -= 3;
-        return;
-    }
-    // Z
-    if (Opcode == 0xC8 && !FLAG_ISSET(FLAG_ZERO))
-    {
-        CreateBox("test fail");
-        currentcycles -= 3;
-        return;
-    }
-    // C
-    if (Opcode == 0xD8 && !FLAG_ISSET(FLAG_ZERO))
-    {
-        CreateBox("test fail");
-        currentcycles -= 3;
-        return;
+                registers.PC = ReadStack();
+
+            } else currentcycles -= 3;
+            break;
+        case 0xD0:
+            if(!FLAG_ISCARRY){
+
+                registers.PC = ReadStack();
+
+            } else currentcycles -= 3;
+            break;
+        case 0xC8:
+            if(FLAG_ISZERO){
+
+                registers.PC = ReadStack();
+
+            } else currentcycles -= 3;
+            break;
+        case 0xD8:
+            if(FLAG_ISCARRY){
+
+                registers.PC = ReadStack();
+
+            } else currentcycles -= 3;
+            break;
+        case 0xC9:
+
+            registers.PC = ReadStack();
+
     }
 
-    registers.PC = ReadStack();
 }
 
 void RETI(unsigned char Opcode)
@@ -1373,17 +1464,34 @@ void RST(unsigned char Opcode)
 void POP(unsigned char Opcode)
 {
 
+        unsigned short *botRowRegs[7] = {&registers.BC, NULL, &registers.DE, NULL, &registers.HL, NULL, &registers.AF};
     struct opcode pop;
     pop.inst = Opcode;
-    *topRowRegs[pop.r1] = ReadStack();
+    // if(pop.r1 == 0x110) {
+    //     registers.AF = ReadStack();
+    //     registers.F &= 0xF0;
+    //     return;
+    // }
+
+    *botRowRegs[pop.r1] = ReadStack();
+    registers.F &= 0xF0;
+    //clear all the lower of F
+
+    
 }
 
 void PUSH(unsigned char Opcode)
 {
-
+    unsigned short *botRowRegs[7] = {&registers.BC, NULL, &registers.DE, NULL, &registers.HL, NULL, &registers.AF};
     struct opcode push;
     push.inst = Opcode;
-    WriteStack(*topRowRegs[push.r1]);
+
+    // if(push.r1 == 0x110) {
+    //     WriteStack(registers.AF); //special case for AF not being in toprowRegs
+    //     return;
+    // }
+
+    WriteStack(*botRowRegs[push.r1]);
 }
 
 void CB(unsigned char Opcode, unsigned char operand)
@@ -1514,6 +1622,8 @@ void CB(unsigned char Opcode, unsigned char operand)
         *BitRegs[CB.r2] = BIT(Bitnum, *BitRegs[CB.r2], 1);
         break;
     }
+
+
 }
 
 unsigned char SHIFT(unsigned char X, unsigned char logical, unsigned char direct)
@@ -1562,7 +1672,7 @@ unsigned char SHIFT(unsigned char X, unsigned char logical, unsigned char direct
         X = ((X >> 1) + C);
     }
 
-    FLAG_SET((X && X) * 0x80);
+    if(X == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}
     FLAG_CLEAR(FLAG_N); // LOOK
     FLAG_CLEAR(FLAG_HALF);
     return X;
@@ -1579,9 +1689,10 @@ unsigned char BIT(unsigned char bit, unsigned char byte, unsigned char OP)
     switch (OP)
     {
     case 0:
-        unsigned char test = (byte & (0x01 << bit)); // Moves over until it reaches the num and ANDs it
+        byte &= (0x01 << bit); // Moves over until it reaches the num and ANDs it
+        byte >>= bit;
 
-        FLAG_SET((test && test) * 0x80);
+        if(byte == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}
         FLAG_CLEAR(FLAG_N); // LOOK
         FLAG_SET(FLAG_HALF);
         break;
@@ -1602,23 +1713,25 @@ void Reset(void)
 {
 
     registers.A = 0x01;
-    registers.F = 0x00; // If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
+    registers.F = 0xB0; // If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
     registers.B = 0x00; // for the bmg pokemon red start
-    registers.C = 0x14;
+    registers.C = 0x13;
     registers.D = 0x00;
-    registers.E = 0x00;
-    registers.H = 0xC0;
-    registers.L = 0x60;
+    registers.E = 0xD8;
+    registers.H = 0x01;
+    registers.L = 0x4D;
     registers.SP = 0xfffe;
-    registers.PC = 0x101;
+    registers.PC = 0x100;
 
     interrupt.master = 0;
     interrupt.enable = 0;
-    interrupt.flag = 1;
+    interrupt.flag = 0x01;
 
     timer.TIMA = 0;
     timer.TMA = 0;
     timer.TAC = 0;
+    
+    // lcd.LY = 50;
 
     // [$FF10] = $80 ; NR10
     // [$FF11] = $BF ; NR11
@@ -1640,23 +1753,23 @@ void Reset(void)
     // [$FF26] = $F1-GB, $F0-SGB ; NR52
     // AUDIO
 
-    lcd.control = 0x91;
-    lcd.status = 0x85;
-    lcd.SCY = 0x00;
-    lcd.SCX = 0;
-    lcd.LYC = 0;
+    // lcd.control = 0x90;
+    // lcd.status = 0x85;
+    // lcd.SCY = 0x00;
+    // lcd.SCX = 0;
+    // lcd.LYC = 0;
 
-    WriteByte(0xFF47, 0xFC); // BGP = 0xFF;
-    WriteByte(0xFF48, 0xFF);
-    WriteByte(0xFF49, 0xFF);
+    // WriteByte(0xFF47, 0xFC); // BGP = 0xFF;
+    // WriteByte(0xFF48, 0xFF);
+    // WriteByte(0xFF49, 0xFF);
 
-    lcd.WY = 0;
-    lcd.WX = 0;
+    // lcd.WY = 0;
+    // lcd.WX = 0;
 }
 
 void RequestInterrupt(int val)
 {
-
+    // printf("Request with Value: %d\n", val);
     switch (val)
     {
     case 0:
@@ -1675,6 +1788,7 @@ void RequestInterrupt(int val)
         interrupt.FJoypad = 1;
         break;
     }
+    // printf("Request Interrupt assigned, IF: %02X val: %02X\n", interrupt.flag, val);
 
 }
 
@@ -1685,7 +1799,7 @@ void HandleInterrupt(void)
         return;
     }
 
-    CreateBox("Handling Interrupt");
+    // printf("Handling Interrupt");
     unsigned short InterruptAddress[5] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
     unsigned char priority;
@@ -1694,27 +1808,27 @@ void HandleInterrupt(void)
     if (interrupt.FVBlank)
     {
         currentFlag = 0x01;
-        priority = 1;
+        priority = 0;
     }
     else if (interrupt.FLCD)
     {
         currentFlag = 0x02;
-        priority = 2;
+        priority = 1;
     }
     else if (interrupt.FTimer)
     {
         currentFlag = 0x04;
-        priority = 3;
+        priority = 2;
     }
     else if (interrupt.FSerial)
     {
         currentFlag = 0x08;
-        priority = 4;
+        priority = 3;
     }
     else if(interrupt.FJoypad)
     {
         currentFlag = 0x10;
-        priority = 5;
+        priority = 4;
     }
 
     if (interrupt.enable & currentFlag)
@@ -1734,13 +1848,15 @@ void Update(void)
 
     const int MAXCYCLES = 69905;
     currentcycles = 0;
+    
 
     while (currentcycles < MAXCYCLES)
     {
 
         int cycles = realtimeDebug();
         currentcycles += cycles;
-        UpdateGraphics(cycles);
+        // UpdateGraphics(cycles);
+        
         UpdateTiming(cycles);
         HandleInterrupt();
 
@@ -1750,8 +1866,6 @@ void Update(void)
     // instSkips = 0;
     // CreateBox("frame");
     // instSkips = 1;
-    
-    //RenderScreen();
 }
 
 void UpdateTiming(int cycles)
@@ -1762,7 +1876,7 @@ void UpdateTiming(int cycles)
     if (IsClockEnabled())
     {
 
-        m_timercounter -= cycles;
+        m_timercounter -= (cycles * 4);
 
         if (m_timercounter <= 0)
         {
@@ -1809,12 +1923,12 @@ int GetFrequency()
     switch (frequency)
     {
     case 0:
-        return 1024;
+        return 4096;
     case 1:
-        return 16;
+        return 262144;
     case 2:
-        return 64;
+        return 65536;
     case 3:
-        return 256;
+        return 16384;
     }
 }

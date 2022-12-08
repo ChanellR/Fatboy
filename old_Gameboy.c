@@ -3,7 +3,7 @@
 #define MAX_MEM 0xFFFF
 
 
-const char Rom[] = "dmg_boot.bin";
+const char Rom[] = "cpu_instrs.bin";
 int clock = 0; //Number of Machine Cycles (4 Clock cycles, )
 
 
@@ -448,7 +448,7 @@ int ExecInstruction (struct CPU *cpu, struct Mem *mem) {
     struct Instruction instruction;
 
     instruction.inst = ReadPC (C, M);
-    printf("Byte is 0X%X, the low: 0x%X, the high: 0x%X, the r2: %X, the r1: %X \n", instruction.inst, instruction.low, instruction.high, instruction.r2, instruction.r1);
+    
     
     //First, large middle rows
 
@@ -1099,13 +1099,11 @@ int main(void){
     
     
 
-    while (input != 'n'){
+    while (1){
         ExecInstruction ( &cpu, &mem);
-        DisplayReg (&cpu );
-        
+        printf("%c", mem.Data[0xFF01]);
         //user deactivated loop
-        printf("Continue? [y/n]: ");
-        scanf(" %c", &input);
+
     }
     
 

@@ -12,7 +12,7 @@
 #define SCREEN_WIDTH 900 
 #define SCREEN_HEIGHT 900
 
-void DrawTile (unsigned char * stream, SDL_Renderer * render, int x_offset, int y_offset);
+void DisplayGraphics (unsigned char ** stream, SDL_Renderer * render);
 void CreatePixelStream (unsigned short Address);
 unsigned char Stream[64 * 2];
 
@@ -40,27 +40,28 @@ int main(int argc, char** argv){
 
     LoadRom();
     Reset();
+    remove("Log.txt");
 
     bool running = true;
     while(running){
 
-        SDL_Event event;
-        while(SDL_PollEvent(&event)){
+        // SDL_Event event;
+        // while(SDL_PollEvent(&event)){
 
-            switch(event.type){
-                case SDL_QUIT:
-                    running = false;
-                    break;
+        //     switch(event.type){
+        //         case SDL_QUIT:
+        //             running = false;
+        //             break;
 
-                default:
-                    break;
-            }
+        //         default:
+        //             break;
+        //     }
 
-        }
-        
-         
+        // }
+
         Update(); //assuming this takes and insignificant amount of time
-        Sleep(1000); //update 60 times a second
+        // DisplayGraphics(&WindowData, renderer);
+        // Sleep(1000/60); //update 60 times a second
 
         
         // CreatePixelStream(0x8010);
@@ -120,61 +121,65 @@ void CreatePixelStream (unsigned short Address) {
     
 }
 
-void DrawTile (unsigned char * stream, SDL_Renderer * render, int x_offset, int y_offset)
+void DisplayGraphics (unsigned char ** stream, SDL_Renderer * render)
 {
-    int Pixel_width = SCREEN_WIDTH / 16;
-    int Pixel_height = SCREEN_HEIGHT / 16;
+    int DotWidth = 160;
+    int DotHeight = 144;
+    int Pixel_width = SCREEN_WIDTH / DotWidth; //160 x 144 Pixels are rectangles
+    int Pixel_height = SCREEN_HEIGHT / DotHeight;
 
-    SDL_Rect * Pixels = malloc(64 * sizeof(SDL_Rect));
+    SDL_Rect * Pixels = malloc((DotWidth * DotHeight) * sizeof(SDL_Rect));
 
-    for (int i = 0; i < 8; i++) //y
+    for (int i = 0; i < DotHeight; i++) //y 144
     {
-        for (int j = 0; j < 8; j++) //x
+        for (int j = 0; j < DotWidth; j++) //x 160
         {
 
-            Pixels[i*8 + j].x = (x_offset * SCREEN_WIDTH/2) + j * Pixel_width;
-            Pixels[i*8 + j].y = (y_offset * SCREEN_HEIGHT/2) + i * Pixel_height;
+            Pixels[i*160 + j].x = j * Pixel_width;
+            Pixels[i*160 + j].y = i * Pixel_height;
 
-            Pixels[i*8 + j].h = Pixel_height;
-            Pixels[i*8 + j].w = Pixel_width;
+            Pixels[i*160 + j].h = Pixel_height;
+            Pixels[i*160 + j].w = Pixel_width;
             
         }
 
     }
 
-    for (int k = 0; k < 64; k++) {
+    for (int k = 0; k < (DotHeight); k++) {
 
-        unsigned char r;
-        unsigned char g;
-        unsigned char b;
+        for (int h = 0; h < (DotWidth); h++){
+
+            unsigned char r;
+            unsigned char g;
+            unsigned char b;
 
 
-        switch(stream[k]){
-            case 0:
+            switch(stream[k][h]){
+                case 0:
 
-                r = g = b = 0;
-                break;
+                    r = g = b = 0;
+                    break;
 
-            case 1:
+                case 1:
 
-                r = g = b = 75;
-                break;
+                    r = g = b = 0x77;
+                    break;
 
-            case 2:
+                case 2:
 
-                r = g = b = 150;
-                break;
+                    r = g = b = 0xCC;
+                    break;
 
-            case 3:
+                case 3:
 
-                r = g = b = 255;
-                break;
+                    r = g = b = 255;
+                    break;
 
+            }
+
+            SDL_SetRenderDrawColor(render, r, g, b, 255);
+            SDL_RenderFillRect(render, &Pixels[k*160 + h]);
         }
-
-        SDL_SetRenderDrawColor(render, r, g, b, 255);
-        SDL_RenderFillRect(render, &Pixels[k]);
-
     }
 }
 

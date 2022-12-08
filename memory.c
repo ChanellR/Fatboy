@@ -6,6 +6,8 @@
 #include "display.h"
 #include "gpu.h"
 
+#define CLOCKSPEED 4194304
+
 
 //Just focus on using Boot Rom for now 
 
@@ -33,7 +35,9 @@ unsigned char OAM[0xA0]; //FE00 - FE9F
 unsigned char IO[0x80]; //FF00 - FF7F
 unsigned char HRAM[(0xFFFE - 0xFF7F + 1)]; //FF80 - FFFE
 
-char Filename[] = "Red.gb";
+char Filename[] = "src/03-op sp,hl.gb";
+
+int skipping = 1;
 
 void LogMemory (void) {
 
@@ -104,61 +108,90 @@ unsigned char ReadByte (unsigned short Address) {
         output = WRAM[Address - 0xE000];
 
     } else if (Address >= 0xFEA0 && Address <= 0xFEFF) {
+
         CreateBox("non usable space");
         return 0;
-    } else if (Address >= 0xFF00 && Address <= 0xFFFE) {
 
-        output = HRAM[Address - 0xFF00];
+    } else if (Address >= 0xFF00 && Address < 0xFF80){
 
+        switch(Address){ //IO
+        case 0xFF04:
+            CreateBox("Read from DIV"); 
+            output = timer.DIV;
+            break;
+        case 0xFF05:
+            CreateBox("Read from TIMA");
+            output = timer.TIMA;
+            break;
+        case 0x0FF06:
+            CreateBox("Read from TMA");
+            output = timer.TMA;
+            break;
+        case 0xFF07: //tima stacking
+            CreateBox("Read from TAC");
+            output = timer.TAC;
+            break;
+        case 0xFF00:
+            CreateBox("Read from joypad");
+            output = joypad.keys;
+            break;
+        case 0xFF0F: //IF
+            
+            output = interrupt.flag;
+            // printf("Reading from IF, IF: %02X \n", interrupt.flag);
+            break;
+        case 0xFF40:
+            printf("yes");
+            CreateBox("Read from lcd.control");
+            output = lcd.control;
+            break;
+        case 0xFF41:
+            CreateBox("Read from lcd.status");
+            output = lcd.status;
+            break;
+        case 0xFF42:
+            output = lcd.SCY;
+            break;
+        case 0xFF43:
+            output = lcd.SCX;
+            break;
+        case 0xFF44:
+            output = 0x90; //lcd.LY stubbing
+            break;
+        case 0xFF45:
+            output = lcd.LYC;
+            break;
+        case 0xFF4A:
+            output = lcd.WY;
+            break;
+        case 0xFF4B:
+            output = lcd.WX;
+            break;       
+        default:
+            output = IO[Address-0xFF00];
+    }
+    }
+    else if (Address >= 0xFF80 && Address <= 0xFFFF) {
+
+        
+        if(Address == 0xFFFF){
+            output = interrupt.enable;
+            // printf("Reading from IE, IE: %02X \n", interrupt.enable);
+        } else {
+            output = HRAM[Address - 0xFF80];
+        }
     } 
     
 
-    switch(Address){ //IO
-        case 0xFF04:
-            CreateBox("Read from DIV"); 
-            return timer.DIV;
-        case 0xFF05:
-            CreateBox("Read from TIMA");
-            return timer.TIMA;
-        case 0x0FF06:
-            CreateBox("Read from TMA");
-            return timer.TMA;
-        case 0xFF07: //tima stacking
-            CreateBox("Read from TAC");
-            return timer.TAC;
-        case 0xFF00:
-            CreateBox("Read from joypad");
-            return joypad.keys;
-        case 0xFFFF: //IE
-            CreateBox("Read from IE");
-            return interrupt.enable;
-        case 0xFF0F: //IF
-            CreateBox("Read from IF");
-            return interrupt.flag;
-        case 0xFF40:
-            CreateBox("Read from lcd.control");
-            return lcd.control;
-        case 0xFF41:
-            CreateBox("Read from lcd.status");
-            return lcd.status;
-        case 0xFF42:
-            return lcd.SCY;
-        case 0xFF43:
-            return lcd.SCX;
-        case 0xFF44:
-            return lcd.LY;
-        case 0xFF45:
-            return lcd.LYC;
-        case 0xFF4A:
-            return lcd.WY;
-        case 0xFF4B:
-            return lcd.WX;
-            
-    }
 
-    char label[50];
-    sprintf(label, "Read byte 0x%02x from (0x%04x)", output, Address);
-    CreateBox(label);
+    
+    // char label[50];
+    // sprintf(label, "\nRead byte 0x%02x from (0x%04x)", output, Address);
+    // FILE *ptr;
+    // ptr = fopen("Log.txt","a");  
+    // fprintf(ptr, label);
+    // fclose(ptr);
+ 
     return output;
 
 }
@@ -219,21 +252,16 @@ void WriteByte (unsigned short Address, unsigned char value) {
         CreateBox("non usable space");
         return;
 
-    } else if (Address >= 0xFF00 && Address <= 0xFFFE) {
+    } else if (Address >= 0xFF00 && Address < 0xFF80) {
 
-        if (Address == 0xFF46){
-            DoDMATransfer(value);
-
-        }else{
-
-            HRAM[Address - 0xFF00] = value;
-        }
-
-        
-
-    }  
-
-    switch(Address){
+        switch(Address){
+        case 0xFF02:
+            //blargg testing writing to Serial Link 
+            printf("%c", ReadByte(0xFF01));
+            break;
+        case 0xFF01:
+            IO[01] = value;
+            break;
         case 0xFF04:
             CreateBox("Write to DIV");
             timer.DIV = 0;
@@ -249,23 +277,21 @@ void WriteByte (unsigned short Address, unsigned char value) {
         case 0xFF07: //tima stacking
          CreateBox("Write to TAC");
             timer.TAC = value;
+            m_timercounter = CLOCKSPEED / GetFrequency();
             break;
         case 0xFF00:
             CreateBox("Write to joypad");
             joypad.keys = value;
             break;
-        case 0xFFFF: //IE
-            CreateBox("Write to IE");
-            interrupt.enable = value;
-            break;
         case 0xFF0F: //IF
-            CreateBox("Write to IF");
+            
             interrupt.flag = value;
+            // printf("writing to IF, IF: %02X from value: %02X\n", interrupt.flag, value);
             break;
         
         case 0xFF40:
             CreateBox("Write to lcd.control");
-             lcd.control = value;
+            lcd.control = value;
         case 0xFF41:
             CreateBox("Write to lcd.status");
             lcd.status = 0x80;
@@ -277,7 +303,7 @@ void WriteByte (unsigned short Address, unsigned char value) {
             lcd.SCX = value;
             break;
         case 0xFF44:
-            lcd.LY = 0; //reset
+            lcd.LY = 0; //reset cirumcumstantial change
             break;
         case 0xFF45:
             lcd.LYC = value;
@@ -286,15 +312,44 @@ void WriteByte (unsigned short Address, unsigned char value) {
             break;
         case 0xFF4B:
             lcd.WX = value;
-            break;
-
-
-            
+            break;  
+        default:
+            IO[Address-0xFF00] = value;
     } 
 
-    char label[50]; //labels might mess things up
-    sprintf(label, "byte (0x%04x) = 0x%02x", Address, value);
-    CreateBox(label);
+    }
+    else if (Address >= 0xFF80 && Address <= 0xFFFF) {
+
+        if (Address == 0xFF46)
+        {
+            DoDMATransfer(value);
+
+        }else if(Address == 0xFFFF) 
+        {//IE
+            
+            interrupt.enable = value;
+            // printf("writing to IE, IE: %02X from value: %02X\n", interrupt.enable, value);
+        }
+        else 
+        {
+
+            HRAM[Address - 0xFF80] = value;
+        }
+
+
+
+    }  
+
+   
+
+
+    // char label[50]; //labels might mess things up
+    // sprintf(label, "\nbyte (0x%04x) = 0x%02x", Address, value);
+    // FILE *ptr;
+    // ptr = fopen("Log.txt","a");  
+    // fprintf(ptr, label);
+    // fclose(ptr);
+    
     
 }
 

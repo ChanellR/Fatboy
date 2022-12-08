@@ -1,6 +1,6 @@
 #pragma once
 
-extern unsigned char WindowData [160][144][1];
+extern unsigned char WindowData [144][160]; //row, pixel, color
 extern int ScanlineCounter;
 
 struct LCD {
@@ -17,4 +17,6 @@ struct LCD {
 void UpdateGraphics (int cycles);
 int IsLcdOn (void);
 void SetLCDstatus(void);
-
+void DrawScanline(void);
+void RenderTiles(void);
+void RenderSprites(void);
