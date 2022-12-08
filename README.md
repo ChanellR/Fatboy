@@ -1,11 +1,12 @@
 # Gameboy-Emulator
 
 References/Materials:
+
 http://www.codeslinger.co.uk/index.html
 
 https://gekkio.fi/files/gb-docs/gbctr.pdf
 
-EmuDev Discord
+[EmuDev Discord](https://emudev.org/)
 
 https://gbdev.io/pandocs/
 
