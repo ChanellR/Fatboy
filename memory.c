@@ -35,7 +35,7 @@ unsigned char OAM[0xA0]; //FE00 - FE9F
 unsigned char IO[0x80]; //FF00 - FF7F
 unsigned char HRAM[(0xFFFE - 0xFF7F + 1)]; //FF80 - FFFE
 
-char Filename[] = "src/03-op sp,hl.gb";
+char Filename[] = "src/11-op a,(hl).gb";
 
 int skipping = 1;
 

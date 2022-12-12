@@ -16,7 +16,7 @@ LY: 45, LYC: 0, DIV: 80
 
 Try again: LogMemory, continue: +1
 
-
+gcc -Isrc/Include -Lsrc/lib -o main main.c display.c control.c cpu.c gpu.c memory.c -lmingw32 -lSDL2main -lSDL2
 
 Notes:
     pass the loop by fixing LY  
@@ -68,3 +68,6 @@ the 39 is probably because things are getting caught on the
 rest 38. 
 
 Blargg tests
+ALL PASSED
+
+

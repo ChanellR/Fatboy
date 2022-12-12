@@ -413,17 +413,24 @@ void DAA(void)
 void CPL(void)
 {
 
-    registers.A &= 0xFF;
+    registers.A ^= 0xFF;
+    FLAG_SET(FLAG_N);
+    FLAG_SET(FLAG_HALF);
+
 }
 
 void SCF(void)
 {
-
+    FLAG_CLEAR(FLAG_N);
+    FLAG_CLEAR(FLAG_HALF);
     FLAG_SET(FLAG_CARRY);
 }
 
 void CCF(void)
 {
+
+    FLAG_CLEAR(FLAG_N);
+    FLAG_CLEAR(FLAG_HALF);
 
     if (FLAG_ISSET(FLAG_CARRY))
     {
@@ -581,14 +588,15 @@ void CP(unsigned char Opcode)
 
 void SUB8(unsigned char Opcode, unsigned char operand)
 {
+    switch (Opcode){
+        case 0xD6:
 
-    if (Opcode = 0xD6)
-    {
-        SUBC(&registers.A, operand, 0);
-    }
-    else
-    {
-        SUBC(&registers.A, operand, 1);
+            SUBC(&registers.A, operand, 0);
+            break;
+
+        case 0xDE:
+
+            SUBC(&registers.A, operand, 1);
     }
 }
 
@@ -1036,11 +1044,11 @@ void SUBC(unsigned char *destination, unsigned char val, unsigned char carry)
 
     CreateBox("In SUBC");
     // signs may or may nto work
-    signed int diff = *destination - val;
-    char label[50];
-    sprintf(label, "diff: %d, *destination: 0x%04x, val: 0x%04x", diff, *destination, val);
-    CreateBox(label);
-    if (diff == 0)
+    signed int diff = *destination - (val + ((carry == 1) && FLAG_ISCARRY));
+    // adds carry to value being subtracted before doing checks
+
+
+    if ((unsigned char)diff == 0)
     {
         FLAG_SET(FLAG_ZERO);
     }
@@ -1052,7 +1060,7 @@ void SUBC(unsigned char *destination, unsigned char val, unsigned char carry)
     FLAG_SET(FLAG_N);
 
     unsigned char A = *destination & 0x0F;
-    unsigned char B = val & 0x0F;
+    unsigned char B = (val & 0x0F) + ((carry == 1) && FLAG_ISCARRY);
 
     if ((A - B) & 0x10)
     {
@@ -1086,7 +1094,7 @@ void SUBC(unsigned char *destination, unsigned char val, unsigned char carry)
         {
             FLAG_CLEAR(FLAG_CARRY);
         }
-        *destination = (unsigned char)diff - FLAG_ISCARRY;
+        *destination = (unsigned char)diff;
         break;
     case 2: // dec
 
@@ -1320,17 +1328,16 @@ void JUMP8(unsigned char Opcode, signed char offset)
         return;
     }
     // C
-    if (Opcode == 0x38 && !FLAG_ISSET(FLAG_ZERO))
+    if (Opcode == 0x38 && !FLAG_ISSET(FLAG_CARRY))
     {
         CreateBox("test fail");
         currentcycles--;
         return;
     }
 
-    char label[50];
-    sprintf(label, "After JMP8, prev:%04x", registers.PC);
+    // printf("After JMP8, prev:%04x \n", registers.PC);
     registers.PC += offset;
-    CreateBox(label);
+    
 }
 
 void JUMP16(unsigned char Opcode, unsigned short Address)
@@ -1358,7 +1365,7 @@ void JUMP16(unsigned char Opcode, unsigned short Address)
         return;
     }
     // C
-    if (Opcode == 0xDA && !FLAG_ISSET(FLAG_ZERO))
+    if (Opcode == 0xDA && !FLAG_ISSET(FLAG_CARRY))
     {
         CreateBox("test fail");
         currentcycles--;
@@ -1396,7 +1403,7 @@ void CALL(unsigned char Opcode, unsigned short Address)
         return;
     }
     // C
-    if (Opcode == 0xDC && !FLAG_ISSET(FLAG_ZERO))
+    if (Opcode == 0xDC && !FLAG_ISSET(FLAG_CARRY))
     {
         CreateBox("test fail");
         currentcycles -= 3;
@@ -1439,7 +1446,6 @@ void RET(unsigned char Opcode)
             } else currentcycles -= 3;
             break;
         case 0xC9:
-
             registers.PC = ReadStack();
 
     }
@@ -1449,7 +1455,7 @@ void RET(unsigned char Opcode)
 void RETI(unsigned char Opcode)
 {
     interrupt.master = 1;
-    RET(Opcode);
+    RET(0xC9); //default always go through Opcode
 }
 
 void RST(unsigned char Opcode)
@@ -1505,7 +1511,7 @@ void CB(unsigned char Opcode, unsigned char operand)
 
     if (CB.low < 0x08)
     {
-        direction = 1;
+        direction = 1; //left
     }
     else
     {
@@ -1515,18 +1521,18 @@ void CB(unsigned char Opcode, unsigned char operand)
     unsigned char Bitnum;
     if (CB.high > 0x3 && CB.high < 0x8)
     {
-        Bitnum = (CB.inst - 0x4) / 8;
+        Bitnum = (CB.inst - 0x40) / 8;
     }
     else if (CB.high > 0x7 && CB.high < 0xC)
     {
-        Bitnum = (CB.inst - 0x8) / 8;
+        Bitnum = (CB.inst - 0x80) / 8;
     }
     else if (CB.high > 0xB)
     {
-        Bitnum = (CB.inst - 0xC) / 8;
+        Bitnum = (CB.inst - 0xC0) / 8;
     }
 
-    if (CB.r2 == 0x06)
+    if (CB.low == 0x06 || CB.low == 0x0E)
     {
         unsigned char HLpointing = ReadByte(registers.HL);
         unsigned char *HLpointer = &HLpointing;
@@ -1539,8 +1545,36 @@ void CB(unsigned char Opcode, unsigned char operand)
         case 0x1:
             ROTATE(HLpointer, 1, direction);
             break;
+        case 0x2:
+            HLpointing = SHIFT(*HLpointer, 0, direction);
+            break;
+
         case 0x3:
-            SHIFT(*HLpointer, 0, direction);
+
+        if (CB.low == 0x06)
+        { // SWAP
+            
+            struct opcode HLSwap;
+            HLSwap.inst = HLpointing;
+            // printf("HLpointing: %02X\n", HLpointing);
+            // printf("HLSwap: %02X\n", HLSwap.inst);
+
+            HLpointing = ((HLSwap.low << 4) | (HLSwap.high));
+            if (HLpointing == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}
+
+            FLAG_CLEAR(FLAG_N);
+            FLAG_CLEAR(FLAG_HALF);
+            FLAG_CLEAR(FLAG_CARRY);
+
+        } 
+        else 
+        {
+
+            HLpointing = SHIFT(*HLpointer, 1, 0);
+        }
+
+        break;
+
         case 0x4:
         case 0x5:
         case 0x6:
@@ -1564,6 +1598,7 @@ void CB(unsigned char Opcode, unsigned char operand)
             *HLpointer = BIT(Bitnum, *HLpointer, 1);
             break;
         }
+
         WriteByte(registers.HL, *HLpointer);
         return;
     }
@@ -1580,21 +1615,30 @@ void CB(unsigned char Opcode, unsigned char operand)
         break;
 
     case 0x2: // SLA SRA
-        SHIFT(*BitRegs[CB.r2], 0, direction);
+
+        
+        *BitRegs[CB.r2] = SHIFT(*BitRegs[CB.r2], 0, direction);
         break;
 
     case 0x3: // SWAP, SRL
 
         if (CB.low < 0x08)
         { // SWAP
+
             struct opcode RegSwap;
             RegSwap.inst = *BitRegs[CB.r2];
-            *BitRegs[CB.r2] = ((RegSwap.low << 4) + (RegSwap.high));
+            *BitRegs[CB.r2] = ((RegSwap.low << 4) | (RegSwap.high));
+            if (*BitRegs[CB.r2] == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}
+
+            FLAG_CLEAR(FLAG_N);
+            FLAG_CLEAR(FLAG_HALF);
+            FLAG_CLEAR(FLAG_CARRY);
+
             return;
         }
         else
         { // SHIFT
-
+            
             *BitRegs[CB.r2] = SHIFT(*BitRegs[CB.r2], 1, 0);
             return;
         }
@@ -1635,7 +1679,7 @@ unsigned char SHIFT(unsigned char X, unsigned char logical, unsigned char direct
 
     if (direct)
     { // left
-        C = ((X & 0x80) && (X & 0x80));
+        C = ((X & 0x80) && 1);
 
         if (!C)
         {
@@ -1650,9 +1694,7 @@ unsigned char SHIFT(unsigned char X, unsigned char logical, unsigned char direct
     else
     { // right
 
-        C = ((X & 0x01) && (X & 0x01));
-
-        if (!C)
+        if (!((X & 0x01) && 1))
         {
             FLAG_CLEAR(FLAG_CARRY);
         }
@@ -1661,15 +1703,22 @@ unsigned char SHIFT(unsigned char X, unsigned char logical, unsigned char direct
             FLAG_SET(FLAG_CARRY);
         }
 
-        if (!logical)
+        if (!logical) //arithmetic := no negatives
         {
-            C = (X & 0x08);
+
+            C = (X & 0x80);
+            
         }
         else
         {
+
             C = 0;
+
         } // changes from 0 if arthmetic
-        X = ((X >> 1) + C);
+
+        X >>= 1;
+        X += C;
+
     }
 
     if(X == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}
@@ -1686,13 +1735,15 @@ unsigned char BIT(unsigned char bit, unsigned char byte, unsigned char OP)
     //  xx b r [r(HL) = 110]
 
     // sending pointer
+    
     switch (OP)
     {
     case 0:
-        byte &= (0x01 << bit); // Moves over until it reaches the num and ANDs it
-        byte >>= bit;
+        //printf("byte: %02X, bit: %d\n", byte, bit);
+        byte &= (0x1 << bit);
+        //printf("after byte: %02X\n", byte);
 
-        if(byte == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);}
+        if(byte) {FLAG_CLEAR(FLAG_ZERO);} else {FLAG_SET(FLAG_ZERO);}
         FLAG_CLEAR(FLAG_N); // LOOK
         FLAG_SET(FLAG_HALF);
         break;

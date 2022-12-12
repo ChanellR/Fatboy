@@ -32,7 +32,7 @@ int realtimeDebug(void) {
     //     printf("%04x", ReadByte(0xFF44));
     // }
     instruction = ReadByte(registers.PC++);
-  
+    
 
     switch (instructions[instruction].operand_length){
         
@@ -55,6 +55,10 @@ int realtimeDebug(void) {
 
         case -2:
             operand = ReadByte(registers.PC++);
+            if (instruction == 0x18 && operand == 0xFE){
+                exit(0); //infinite JMP -2 loop from blargs
+            }
+
             //  output = CreateBox("after operand (byte)");
             ((void (*)(unsigned char, unsigned char))instructions[instruction].function)(instruction, operand);
             break;

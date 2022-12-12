@@ -9,8 +9,8 @@
 #include "display.h"
 #include "gpu.h"
 
-#define SCREEN_WIDTH 900 
-#define SCREEN_HEIGHT 900
+#define SCREEN_WIDTH 450 
+#define SCREEN_HEIGHT 450
 
 void DisplayGraphics (unsigned char ** stream, SDL_Renderer * render);
 void CreatePixelStream (unsigned short Address);
@@ -19,28 +19,50 @@ unsigned char Stream[64 * 2];
 
 int main(int argc, char** argv){
 
-    if(SDL_Init(SDL_INIT_VIDEO) < 0){
-        printf("Error: SDL failed to initialize\nSDL Error: '%s'\n", SDL_GetError());
-        return 1;
-    }
+    // if(SDL_Init(SDL_INIT_VIDEO) < 0){
+    //     printf("Error: SDL failed to initialize\nSDL Error: '%s'\n", SDL_GetError());
+    //     return 1;
+    // }
 
-    SDL_Window *window = SDL_CreateWindow("SLD test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
+    // SDL_Window *window = SDL_CreateWindow("SLD test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
     
-    if(!window){
-        printf("Error: Failed to open window\nSDL Error: '%s'\n", SDL_GetError());
-        return 1;
-    }
+    // if(!window){
+    //     printf("Error: Failed to open window\nSDL Error: '%s'\n", SDL_GetError());
+    //     return 1;
+    // }
 
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if(!renderer){
-        printf("Error: Failed to create renderer\nSDL Error: '%s'\n", SDL_GetError());
-        return 1;
-    }
+    // SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    // if(!renderer){
+    //     printf("Error: Failed to create renderer\nSDL Error: '%s'\n", SDL_GetError());
+    //     return 1;
+    // }
 
 
     LoadRom();
     Reset();
     remove("Log.txt");
+
+    // registers.AF = 0x0000;
+    // registers.BC = 0x0202;
+    // registers.DE = 0x1020;
+    // registers.HL = 0x9001;
+    // registers.SP = 0xDFF1;
+    // registers.PC = 0xDEF8;
+
+    // WriteByte(registers.HL, 0xFF);
+
+    // CB(0xCB, 0x3E);
+
+    // printf("(HL): %02X\n", ReadByte(registers.HL));
+
+    // printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
+    //                         registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+    //                         ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+
+    // exit(0);
+
+
+
 
     bool running = true;
     while(running){
@@ -82,105 +104,105 @@ reconstruct a sprite image
 unsigned char tile[16][]
 */
 
-void CreatePixelStream (unsigned short Address) {
+// void CreatePixelStream (unsigned short Address) {
 
 
-    for (int i = 0; i < 8; i++)
-    {
+//     for (int i = 0; i < 8; i++)
+//     {
 
-        unsigned char byte1 = ReadByte(Address + 2*i);
-        unsigned char byte2 = ReadByte(Address + 2*i + 1);
+//         unsigned char byte1 = ReadByte(Address + 2*i);
+//         unsigned char byte2 = ReadByte(Address + 2*i + 1);
 
-        for (int j = 0; j < 8; j++)
-        {
-            int bit1 = (byte1 & (1 << (7-j)));
-            int bit2 = (byte2 & (1 << (7-j)));
+//         for (int j = 0; j < 8; j++)
+//         {
+//             int bit1 = (byte1 & (1 << (7-j)));
+//             int bit2 = (byte2 & (1 << (7-j)));
 
-            int colorVal = 3;
+//             int colorVal = 3;
             
-            if (bit1 && bit2) 
-            {
+//             if (bit1 && bit2) 
+//             {
 
-                colorVal = 0;
+//                 colorVal = 0;
 
-            } else if (bit2) {
+//             } else if (bit2) {
 
-                colorVal = 2;
+//                 colorVal = 2;
 
-            } else if (bit1) {
+//             } else if (bit1) {
 
-                colorVal = 1;
+//                 colorVal = 1;
 
-            } 
+//             } 
 
-            Stream[i*8 + j] = (unsigned char) colorVal;   
-        }
+//             Stream[i*8 + j] = (unsigned char) colorVal;   
+//         }
 
-    }
+//     }
 
     
-}
+// }
 
-void DisplayGraphics (unsigned char ** stream, SDL_Renderer * render)
-{
-    int DotWidth = 160;
-    int DotHeight = 144;
-    int Pixel_width = SCREEN_WIDTH / DotWidth; //160 x 144 Pixels are rectangles
-    int Pixel_height = SCREEN_HEIGHT / DotHeight;
+// void DisplayGraphics (unsigned char ** stream, SDL_Renderer * render)
+// {
+//     int DotWidth = 160;
+//     int DotHeight = 144;
+//     int Pixel_width = SCREEN_WIDTH / DotWidth; //160 x 144 Pixels are rectangles
+//     int Pixel_height = SCREEN_HEIGHT / DotHeight;
 
-    SDL_Rect * Pixels = malloc((DotWidth * DotHeight) * sizeof(SDL_Rect));
+//     SDL_Rect * Pixels = malloc((DotWidth * DotHeight) * sizeof(SDL_Rect));
 
-    for (int i = 0; i < DotHeight; i++) //y 144
-    {
-        for (int j = 0; j < DotWidth; j++) //x 160
-        {
+//     for (int i = 0; i < DotHeight; i++) //y 144
+//     {
+//         for (int j = 0; j < DotWidth; j++) //x 160
+//         {
 
-            Pixels[i*160 + j].x = j * Pixel_width;
-            Pixels[i*160 + j].y = i * Pixel_height;
+//             Pixels[i*160 + j].x = j * Pixel_width;
+//             Pixels[i*160 + j].y = i * Pixel_height;
 
-            Pixels[i*160 + j].h = Pixel_height;
-            Pixels[i*160 + j].w = Pixel_width;
+//             Pixels[i*160 + j].h = Pixel_height;
+//             Pixels[i*160 + j].w = Pixel_width;
             
-        }
+//         }
 
-    }
+//     }
 
-    for (int k = 0; k < (DotHeight); k++) {
+//     for (int k = 0; k < (DotHeight); k++) {
 
-        for (int h = 0; h < (DotWidth); h++){
+//         for (int h = 0; h < (DotWidth); h++){
 
-            unsigned char r;
-            unsigned char g;
-            unsigned char b;
+//             unsigned char r;
+//             unsigned char g;
+//             unsigned char b;
 
 
-            switch(stream[k][h]){
-                case 0:
+//             switch(stream[k][h]){
+//                 case 0:
 
-                    r = g = b = 0;
-                    break;
+//                     r = g = b = 0;
+//                     break;
 
-                case 1:
+//                 case 1:
 
-                    r = g = b = 0x77;
-                    break;
+//                     r = g = b = 0x77;
+//                     break;
 
-                case 2:
+//                 case 2:
 
-                    r = g = b = 0xCC;
-                    break;
+//                     r = g = b = 0xCC;
+//                     break;
 
-                case 3:
+//                 case 3:
 
-                    r = g = b = 255;
-                    break;
+//                     r = g = b = 255;
+//                     break;
 
-            }
+//             }
 
-            SDL_SetRenderDrawColor(render, r, g, b, 255);
-            SDL_RenderFillRect(render, &Pixels[k*160 + h]);
-        }
-    }
-}
+//             SDL_SetRenderDrawColor(render, r, g, b, 255);
+//             SDL_RenderFillRect(render, &Pixels[k*160 + h]);
+//         }
+//     }
+// }
 
 
