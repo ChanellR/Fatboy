@@ -32,3 +32,8 @@ glad I decided to shift things.
 CINOOP's realtime debugger has taught me a lot about the importance of debuggers. It's very interesting to see how necessary it is to write
 code that tests your code. I've heard of debugging and tests that are much longer than individual pieces of code, and that developers mainly
 spend time testing code rather than running it. That may or may not be true but it's definitely conceivable. 
+
+12/12/22
+
+After having finally passed all of Blargg's cpu instruction tests, I realized how beneficial it would've been for me to put effort into finding out how to work them in the beginning and use them to track  my progress. When I finished my cpu implementation without testing and moved on to unsuccessfully implementing the PPU, it made me really discouraged because I felt as though I would never get it to work. Having this structure, something that can empirically track my progress has done wonders for me. 
+
