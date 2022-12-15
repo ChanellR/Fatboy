@@ -9,15 +9,15 @@
  //every dot and their hue
 
 struct LCD lcd;
-int ScanlineCounter = 456 + 35; //456 cycles per scan line, there is a 146 vblank buffer
-unsigned char WindowData [144][160];
+int ScanlineCounter = 456; //456 cycles per scan line, there is a 146 vblank buffer
+unsigned char* GetPixelColor (unsigned char bit1, unsigned char bit2);
 
 void UpdateGraphics (int cycles) {
 
     SetLCDstatus();
 
     if(IsLcdOn()) {
-        ScanlineCounter -= cycles;
+        ScanlineCounter -= (cycles * 4);
     } else {
         return;
     }
@@ -25,8 +25,9 @@ void UpdateGraphics (int cycles) {
     if (ScanlineCounter <= 0) {
 
         lcd.LY++;
+        int overflow = (-1 * ScanlineCounter);
         ScanlineCounter = 456;
-
+        ScanlineCounter -= overflow;
 
 
         if(lcd.LY == 144) {
@@ -39,7 +40,7 @@ void UpdateGraphics (int cycles) {
 
         } else if (lcd.LY < 144) {
             
-            // DrawScanline(); //this will add a line to the render buffer
+            //DrawScanline(); //this will add a line to the render buffer
         }
 
     } 
@@ -104,7 +105,6 @@ void SetLCDstatus (void) {
 
 
         if (ReqInt && (currentMode != mode)) {
-            printf("requested");
             RequestInterrupt(1); //stat interrupt
         }
 
@@ -112,7 +112,6 @@ void SetLCDstatus (void) {
             lcd.status |= 0x04;
 
             if(lcd.status & 0x40) { //bit 6
-                CreateBox("LYC interrupt.");
                 RequestInterrupt(1);
             }
 
@@ -128,7 +127,7 @@ void SetLCDstatus (void) {
 void DrawScanline(void) {
 
     if(lcd.control & 0x01) {
-        RenderTiles();
+        // LoadTileData();
     } 
     
     if (lcd.control & 0x02) {
@@ -136,139 +135,110 @@ void DrawScanline(void) {
     }
 }
 
-void RenderTiles(void) {
-
-    // first figure out where the layout is stored
-    unsigned short TileMapAddress;
-    unsigned short TileDataAddress;
-    unsigned char WindowEnabled = 0;
-    unsigned char unsig = 1;
-
-    //BG & Window Data
-    if (lcd.control & 0x10) {
-
-        TileDataAddress = 0x8000;
-
-    } else {
-    
-        TileDataAddress = 0x8800;
-        unsig = 0; //signed data Address.
-
-    }
-
-    if(lcd.control & 0x20) {
-
-        if (lcd.LY >= lcd.WY) WindowEnabled = 1; //if in window space, above windows top left corner 
-
-    }
-
-    //Map areas
-
-    
-    if(WindowEnabled){
-
-        if(lcd.control & 0x40) {
-
-        TileMapAddress = 0x9C00;
-
-        } else {
-
-            TileMapAddress = 0x9800;
-            
-        }
-
-    } else {
-
-        if(lcd.control & 0x08) { //read from Background part for the address instead.
-
-        TileMapAddress = 0x9C00;
-
-        } else {
-
-            TileMapAddress = 0x9800;
-
-        }
-    }
-
-    //no to move onto actually drawing the line
-
-    unsigned char Ypos = 0; //check if this should always displaced if not in window, scroll Y + is scaring me
-    
-    if(!WindowEnabled) {
-        Ypos = lcd.SCY + lcd.LY;
-    } else {
-        Ypos = lcd.LY - lcd.WY; //move back until the beginning of the window. Does it wrap around?
-    }
-
-    unsigned char TileRow = (Ypos / 8); //integer divides down
-
-    for (int Pixel = 0; Pixel < 160; Pixel++){ //Pixel because they can have uneven offsets
-
-        unsigned char Xpos = Pixel + lcd.SCX;
-
-        if(WindowEnabled) {
-
-            if (Pixel >= lcd.WX) {
-                
-                Xpos = Pixel - lcd.WX;
-                //no minus 7?
-            }  
-
-        }
-
-        //find what tile is being read
-        //The tiles map has id's in line with all 32 x 32 tiles in order
-
-        unsigned char TileCol = (Xpos / 8);
-        signed char TileID;
-
-        //read the ID byte from the map to find the data for that tile
-
-        unsigned short TileIDAddress = TileMapAddress + (TileRow * 32) + (TileCol);
-
-        if(unsig){
-            TileID = (unsigned char) ReadByte(TileIDAddress);
-        } else {
-            TileID = (signed char) ReadByte(TileIDAddress);
-        }
-
-
-        if (unsig) { //offsets the tiledata address to find the tile data
-            TileDataAddress += (TileID * 16); 
-        } else {
-            TileDataAddress += ((TileID + 128) * 16);
-        }
-
-        unsigned char byte1 = ReadByte( TileDataAddress + (Ypos % 8) * 2 ); //off set by their position in the tile
-        unsigned char byte2 = ReadByte( TileDataAddress + (Ypos % 8) * 2 + 1 );
-
-        unsigned char TileBit = (Xpos % 8);
- 
-        int bit1 = (byte1 & (1 << (7-TileBit)));
-        int bit2 = (byte2 & (1 << (7-TileBit)));
-
-        int colorVal = 3;
-        
-        if (bit1 && bit2) 
-        {
-            colorVal = 0;
-
-        } else if (bit2) {
-
-            colorVal = 2;
-
-        } else if (bit1) {
-
-            colorVal = 1;
-
-        } 
-
-        WindowData[lcd.LY][Pixel] =  (unsigned char) colorVal; //input into the specific row and pixel
-
-    }
-
-}
-
 void RenderSprites (void) {
 
 }
+
+
+unsigned char * LoadNintendoLogo (void){
+
+    static unsigned char PixelBatch[6 * 8 * 8 * 3];
+
+    for (int tile = 0; tile < 48; tile++ )
+    {
+        int tileOffset = (tile % 2) ? ((tile % 2) * 48 * 3 * 2 + (tile/2 * 4 * 3)) : (tile/2 * 4 * 3); // if odd, skip two lines
+        
+        tileOffset += (tile >= 24) ? 48 * 3 * 3 : 0; //next line
+        unsigned char byte = ReadByte(0x0104 + tile);
+
+        for (int i = 0; i < 8; i++)
+        {
+
+        int offset = (i > 3) ? i * 3 + (44 * 3) : i * 3;
+        unsigned char color = (byte & (0x80>>i)) ? 0x0 : 0xFF;
+
+        PixelBatch[offset + tileOffset] = color;
+        PixelBatch[offset + tileOffset + 1] = color;
+        PixelBatch[offset + tileOffset + 2] = color;
+        
+        }
+    }
+
+    return PixelBatch;
+}
+
+unsigned char * LoadTilesFromMap (unsigned short MapAddress, unsigned short DataAddress)
+{   
+    //displays all tiles currently mapped in the BG, doesn't hold scanline functionality but makes sense. 
+    //returns 8 x 8 pixel bitmap
+    //unsigned only 0x8000-
+    static unsigned char Pixels[256 * 256 * 3]; //whole ting
+    unsigned short TileIDAddress = MapAddress;
+    //BG
+   
+    for (int tile = 0; tile < ( 32 * 32 ); tile++)
+    {
+        int tileOffset = (tile % 32) * 8 * 3 + ((tile / 32) * 256 * 3 * 8); //row then coloumn
+
+        unsigned char TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(TileIDAddress + tile) : (signed char) ReadByte(TileIDAddress + tile);
+        unsigned short TileDataAddress = DataAddress;
+
+        int offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 127) * 16);
+        TileDataAddress += (offset); 
+
+        for (int line = 0; line < 8; line++)
+        {
+            int lineoffset = line * (256) * 3;// moves back to first spot
+
+            unsigned char byte1 = ReadByte( TileDataAddress + line * 2); //off set by their position in the tile
+            unsigned char byte2 = ReadByte( TileDataAddress + line * 2 + 1 );
+
+            for(int pixel = 0; pixel < 8; pixel++)
+            {
+                
+                int PixelOffset = pixel * 3;
+
+                unsigned char bit1 = (byte1 & (0x80 >> pixel));
+                unsigned char bit2 = (byte2 & (0x80 >> pixel));
+
+                unsigned char *colors;
+                colors = GetPixelColor(bit1, bit2);
+
+                Pixels[tileOffset + lineoffset + PixelOffset] = GetPixelColor(bit1, bit2)[0];
+                Pixels[tileOffset + lineoffset + PixelOffset + 1] = GetPixelColor(bit1, bit2)[1];
+                Pixels[tileOffset + lineoffset + PixelOffset + 2] = GetPixelColor(bit1, bit2)[2];
+                
+            }
+        }
+    }
+
+    return Pixels;
+}
+   
+unsigned char * GetPixelColor (unsigned char bit1, unsigned char bit2)
+{
+
+    if (bit1 && bit2) 
+    {
+        //black
+        // return (unsigned char []){0x08, 0x18, 0x20};
+        return (unsigned char []){0x08, 0x18, 0x20};
+    } else if (bit1) {
+
+        //light grey
+        return (unsigned char []){0x88, 0xC0, 0x70};
+
+    } else if (bit2) {
+
+        //dark grey
+        return (unsigned char []){0x34, 0x68, 0x56};
+
+    } else {
+
+        //white
+        return (unsigned char []){0xE0, 0xF8, 0xD0};
+
+    } 
+    
+}
+    

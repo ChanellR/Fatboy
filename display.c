@@ -9,128 +9,82 @@
 
 
 unsigned char instruction;
-int instSkips = 1;
 unsigned short operand = 0;
-int currentlyskipping = 1;
-unsigned short Breakpoint = 0x4BED;
-int go = 0;
 
-int CreateBox(char *label);
 
+int CreateBox(void);
 
 int realtimeDebug(void) {
 	
-	int output;
-
-    
-    instSkips = 0;
-    CreateBox("");
-    instSkips = 1;
-    // int go = 1;
-    // if(registers.PC == 0xC365 && (go == 1)){
-    //     go = 0;
-    //     printf("%04x", ReadByte(0xFF44));
-    // }
+    CreateBox();
     instruction = ReadByte(registers.PC++);
-    
 
     switch (instructions[instruction].operand_length){
         
         case -4:
             operand = ReadByte(registers.PC++);
-            // output = CreateBox("after operand (byte)");
             ((void (*)(unsigned char, signed char))instructions[instruction].function)(instruction, (signed char) operand);
-            
             
             break;
         case -3:
 
             operand = ReadShort(registers.PC);
-            // output = CreateBox("after operand (short)");
             registers.PC += 2;
-
             ((void (*)(unsigned char, unsigned short))instructions[instruction].function)(instruction, operand);
             
             break;
 
         case -2:
             operand = ReadByte(registers.PC++);
-            if (instruction == 0x18 && operand == 0xFE){
-                exit(0); //infinite JMP -2 loop from blargs
-            }
-
-            //  output = CreateBox("after operand (byte)");
             ((void (*)(unsigned char, unsigned char))instructions[instruction].function)(instruction, operand);
             break;
         case -1:
             operand = 0;
-            output = CreateBox("no operand");
             ((void (*)(unsigned char))instructions[instruction].function)(instruction);
             break;
 
         case 0:
-        operand = 0;
-        output = CreateBox("no op/inst passing");
+            
+            operand = 0;
+
+            unsigned char saviorcontainer[1];
+            char *saviorcontainerPtr = saviorcontainer; //magic code that makes tests work
+            sprintf(saviorcontainerPtr, "");
+
             ((void (*)())instructions[instruction].function)();
-             
+            
             break;
 
         case 1:
             operand = ReadByte(registers.PC++);
-            // output = CreateBox("after operand (byte)");
             ((void (*)(unsigned char))instructions[instruction].function)(operand);
-             
              
             break;
 
     }
-
-    //only after op
     
-    
-	if (instSkips) {
-        instSkips--;
-    }
-
-    if(registers.PC == Breakpoint) {
-        currentlyskipping = 0;
-    }
-
-    if(currentlyskipping) {
-        instSkips++;
-    }
-
-
-	// if(instructions[instruction].operand_length) debugMessageP += 
-	// else debugMessageP += sprintf(debugMessageP, instruction);
-    
-
     return instructions[instruction].cycles;
 }
 
 
-int CreateBox (char *label){
-    
-    char debugMessage[7000];
-    char *debugMessageP = debugMessage;
+int CreateBox (void){
 
+    // if(registers.PC >= 0xC33C && registers.PC <= 0xC33F) 
+    // {
     
-    if (instSkips) {
-        //skip if there are remaining skips
-        return 0;
-    }
+    // char debugMessage[8000];
+    // char *debugMessageP = debugMessage;
+    // debugMessageP += sprintf(debugMessageP, "memAddr[instruction]: %lu, memAddr[registers.A]: %lu\n", &instruction, &registers.A);
+    // debugMessageP += sprintf(debugMessageP, "A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X) instruction: %02X\n", 
+    //                         registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+    //                         ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3), instruction);
 
+    // FILE *ptr;
     
-    debugMessageP += sprintf(debugMessageP, "A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
-                            registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
-                            ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
-
-    FILE *ptr;
-    
-    ptr = fopen("Log.txt","a");  
-    fprintf(ptr, debugMessage);
-    fclose(ptr);
-    
+    // ptr = fopen("Log.txt","a");  
+    // fprintf(ptr, debugMessage);
+    // fclose(ptr);
+    // }
     // if ( (registers.PC == 0xDEFA) || (go == 2)){
     // go++;
 
@@ -153,19 +107,6 @@ int CreateBox (char *label){
 	
     // debugMessageP += sprintf(debugMessageP, "Read Stack: %02x %02X", ReadByte(registers.SP), ReadByte(registers.SP + 1));
     // int response = MessageBox(NULL, debugMessage, "Debug Step", MB_DEFBUTTON3 | MB_CANCELTRYCONTINUE | MB_ICONINFORMATION);
-    
-    // if (response == 2) exit(0);
-    // }
-
-    // if (response == 10) { //try again 10 cancel: 2 continue: 11
-    //     //Log Memory
-    //     LogMemory();
-
-        
-
-    //     // instSkips = 5;
-    // } 
-
 
 }
 	

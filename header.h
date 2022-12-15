@@ -16,14 +16,9 @@
 #define FLAG_CLEAR(x) (registers.F &= ~x)
 
 
-extern int currentcycles;
-extern int m_timercounter;
-extern int m_dividercounter;
+extern int timercounter;
+extern int dividercounter;
 extern int ScanlineCounter;
-extern int frame;
-extern int instSkips;
-extern unsigned short Breakpoint;
-extern int currentlyskipping;
 
 struct registers {
 
@@ -129,8 +124,6 @@ void loadRegS(unsigned char Opcode); //load reg short
 void load8bit(unsigned char Opcode, unsigned char operand); //load byte to Register
 
 void load16bit(unsigned char Opcode, unsigned short operand);
-void store8bit(unsigned short Address, unsigned char value);
-void writeStack(unsigned short value);
 
 void INCRegS(unsigned char Opcode);
 void INCRegB(unsigned char Opcode);
@@ -188,10 +181,8 @@ void CP8 (unsigned char Opcode, unsigned char operand);
 void ADDSP (unsigned char Opcode, signed char operand);
 
 void HandleInterrupt (void);
-void GetInput (int *wakeupcaller);
 
 int CpuStep (void);
-void CheckInterrupts(void);
 
 int realtimeDebug(void);
 int GetFrequency(void);

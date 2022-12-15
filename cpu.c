@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "header.h"
 #include "memory.h"
@@ -15,15 +16,15 @@
 struct timer timer;
 struct interrupt interrupt;
 struct registers registers;
-unsigned char stopped;
-int frame; //number of Updates performed. 
-int currentcycles;
+//number of Updates performed. 
+int cyclesRegained; //regained after failed jmp
 
-int m_timercounter = CLOCKSPEED / 1024; // set to mode 0
-int m_dividercounter = 256;
+int timercounter = CLOCKSPEED / 1024; // set to mode 0
+int dividercounter = 256;
 
 const struct Instruction instructions[256] = {
     //-3: word LD, -2: byte LD, -1: register specific, 0: none, 1:byte, 2: word
+    //cycles are machine cycles, not T states
 
     {0, nop, 1},        // 0x00
     {-3, load16bit, 3}, // 0x01
@@ -307,6 +308,7 @@ const struct Instruction instructions[256] = {
 
 int CpuStep(void)
 {
+    CreateBox();
 
     unsigned char instruction = ReadByte(registers.PC++);
 
@@ -315,9 +317,12 @@ int CpuStep(void)
 
     case -4:
         ((void (*)(unsigned char, signed char))instructions[instruction].function)(instruction, ReadByte(registers.PC++));
+        //signed char
+        break;
     case -3:
-        ((void (*)(unsigned char, unsigned short))instructions[instruction].function)(instruction, ReadShort(registers.PC));
-        registers.PC += 2;
+        registers.PC += 2; //need to not break the passage 
+        ((void (*)(unsigned char, unsigned short))instructions[instruction].function)(instruction, ReadShort(registers.PC - 2));
+        
         break;
     case -2:
         ((void (*)(unsigned char, unsigned char))instructions[instruction].function)(instruction, ReadByte(registers.PC++));
@@ -348,23 +353,25 @@ void nop(void) {}
 
 void STOP(void)
 {
-    stopped = 1;
-    printf("Stopped");
+
     // Reset, start at 0000h
     // input, start after instruction
+
 }
 
 void HALT(void)
 {
-    stopped = 2;
+
     if (!interrupt.flag){ //if no interrupts, move backwards
         registers.PC--;
     }
     // Halted
+
 }
 
 void DAA(void)
 {
+    
     // note: assumes a is a uint8_t and wraps from 0xff to 0
     signed char additive;
     unsigned char done = 0;
@@ -407,7 +414,7 @@ void DAA(void)
     if(registers.A == 0) {FLAG_SET(FLAG_ZERO);} else {FLAG_CLEAR(FLAG_ZERO);} // the usual z flag
     FLAG_CLEAR(FLAG_HALF);                         // h flag is always cleared
 
-    CreateBox("after DAA");
+
 }
 
 void CPL(void)
@@ -421,9 +428,11 @@ void CPL(void)
 
 void SCF(void)
 {
+
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_SET(FLAG_CARRY);
+
 }
 
 void CCF(void)
@@ -482,7 +491,7 @@ void AND(unsigned char Opcode)
     FLAG_CLEAR(FLAG_N);
     FLAG_SET(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
-    CreateBox("After AND");
+
 }
 
 void XOR(unsigned char Opcode)
@@ -517,7 +526,7 @@ void XOR(unsigned char Opcode)
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
 
-    CreateBox("after XOR");
+
 }
 
 void OR(unsigned char Opcode)
@@ -550,7 +559,7 @@ void OR(unsigned char Opcode)
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
-    CreateBox("after OR");
+
 }
 
 void CP(unsigned char Opcode)
@@ -573,17 +582,7 @@ void CP(unsigned char Opcode)
     }
 
     SUBC(&A, val, 0); // uses sub flags
-    CreateBox("After CP Reg");
 
-    // FLAG_SET((registers.A && registers.A) * 0x80); //Z
-    // FLAG_SET(FLAG_N);
-    // FLAG_CLEAR(FLAG_HALF);
-    // FLAG_CLEAR(FLAG_CARRY); //LOOK
-
-    // if (Opcode == 0xBF) {
-    //     FLAG_SET(FLAG_ZERO);
-    //     FLAG_SET(FLAG_N);
-    // }
 }
 
 void SUB8(unsigned char Opcode, unsigned char operand)
@@ -617,7 +616,7 @@ void AND8(unsigned char Opcode, unsigned char operand)
     FLAG_SET(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
 
-    CreateBox("After AND8");
+
 }
 
 void XOR8(unsigned char Opcode, unsigned char operand)
@@ -636,7 +635,7 @@ void XOR8(unsigned char Opcode, unsigned char operand)
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
-    CreateBox("After XOR8");
+
 }
 
 void OR8(unsigned char Opcode, unsigned char operand)
@@ -655,7 +654,7 @@ void OR8(unsigned char Opcode, unsigned char operand)
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
     FLAG_CLEAR(FLAG_CARRY);
-    CreateBox("After OR8");
+
 }
 
 void CP8(unsigned char Opcode, unsigned char operand)
@@ -663,7 +662,7 @@ void CP8(unsigned char Opcode, unsigned char operand)
 
     unsigned char A = registers.A;
     SUBC(&A, operand, 0); // uses sub flags
-    CreateBox("After CP8");
+
 }
 
 void load8bit(unsigned char Opcode, unsigned char operand)
@@ -676,6 +675,7 @@ void load8bit(unsigned char Opcode, unsigned char operand)
         break;
     case 0xF0:
         registers.A = ReadByte(0xFF00 + operand);
+        //if(Opcode == 0xF0 && operand == 0x0F) printf("A: %02X\n", registers.A);
         break;
     case 0xE2:
         WriteByte(0xFF00 + registers.C, registers.A);
@@ -809,10 +809,8 @@ void INCRegS(unsigned char Opcode)
 
     struct opcode Inc;
     Inc.inst = Opcode;
-    char label[50];
-    sprintf(label, "Increasing: 0x%04x by 1. r1 = 0x%04x", *topRowRegs[Inc.r1], Inc.r1);
-    CreateBox(label);
     *topRowRegs[Inc.r1] += 1;
+
 }
 
 void INCRegB(unsigned char Opcode)
@@ -1032,9 +1030,6 @@ void DECRegS(unsigned char Opcode)
 
     struct opcode Dec;
     Dec.inst = Opcode;
-    char label[50];
-    sprintf(label, "Decreasing: 0x%04x by 1. r1 = 0x%04x", *topRowRegs[Dec.r1 - 1], Dec.r1);
-    CreateBox(label);
     *topRowRegs[Dec.r1 - 1] -= 1;
     // CHECK
 }
@@ -1042,7 +1037,6 @@ void DECRegS(unsigned char Opcode)
 void SUBC(unsigned char *destination, unsigned char val, unsigned char carry)
 {
 
-    CreateBox("In SUBC");
     // signs may or may nto work
     signed int diff = *destination - (val + ((carry == 1) && FLAG_ISCARRY));
     // adds carry to value being subtracted before doing checks
@@ -1177,7 +1171,7 @@ void ROTATE(unsigned char *object, unsigned char carry, unsigned char direct)
 
     FLAG_CLEAR(FLAG_N);
     FLAG_CLEAR(FLAG_HALF);
-    CreateBox("After Rotate");
+
 }
 
 void ADDSP(unsigned char Opcode, signed char operand)
@@ -1248,11 +1242,7 @@ void ADDSP(unsigned char Opcode, signed char operand)
 
     FLAG_CLEAR(FLAG_ZERO);
     FLAG_CLEAR(FLAG_N);
-    if(go)
-    {
-        printf("new SP: %04X S8: %d PC: %04X, F: %02X\n",registers.SP, S8, registers.PC, registers.F);
-        
-    }
+
 
 }
 
@@ -1297,41 +1287,43 @@ void ADDCS(unsigned short *destination, unsigned short val, unsigned char carry)
 
 void JUMPHL(void)
 {
-    char label[50];
-    sprintf(label, "After JMPHL, prev:%04x", registers.PC);
+
     registers.PC = registers.HL;
-    CreateBox(label);
+
 }
 
 void JUMP8(unsigned char Opcode, signed char offset)
 {
 
+    // if (Opcode == 0x18 && offset == -2){
+    //     exit(0); //infinite JMP -2 loop from blargs
+    // }
     // NZ
     if (Opcode == 0x20 && FLAG_ISSET(FLAG_ZERO))
     {
-        CreateBox("test fail");
-        currentcycles--;
+
+        cyclesRegained--;
         return;
     } // subtract one cycle
     // NC
     if (Opcode == 0x30 && FLAG_ISSET(FLAG_CARRY))
     {
-        CreateBox("test fail");
-        currentcycles--;
+
+        cyclesRegained--;
         return;
     }
     // Z
     if (Opcode == 0x28 && !FLAG_ISSET(FLAG_ZERO))
     {
-        CreateBox("test fail");
-        currentcycles--;
+
+        cyclesRegained--;
         return;
     }
     // C
     if (Opcode == 0x38 && !FLAG_ISSET(FLAG_CARRY))
     {
-        CreateBox("test fail");
-        currentcycles--;
+
+        cyclesRegained--;
         return;
     }
 
@@ -1346,36 +1338,37 @@ void JUMP16(unsigned char Opcode, unsigned short Address)
     // NZ
     if (Opcode == 0xC2 && FLAG_ISSET(FLAG_ZERO))
     {
-        CreateBox("test fail");
-        currentcycles--;
+
+
+        cyclesRegained--;
+
+
         return;
     } // subtract one cycle
     // NC
     if (Opcode == 0xD2 && FLAG_ISSET(FLAG_CARRY))
     {
-        CreateBox("test fail");
-        currentcycles--;
+
+        cyclesRegained--;
         return;
     }
     // Z
     if (Opcode == 0xCA && !FLAG_ISSET(FLAG_ZERO))
     {
-        CreateBox("test fail");
-        currentcycles--;
+
+        cyclesRegained--;
         return;
     }
     // C
     if (Opcode == 0xDA && !FLAG_ISSET(FLAG_CARRY))
     {
-        CreateBox("test fail");
-        currentcycles--;
+
+        cyclesRegained--;
         return;
     }
 
-    char label[50];
-    sprintf(label, "After JMP16, prev:%04x", registers.PC);
     registers.PC = Address;
-    CreateBox(label);
+
 }
 
 void CALL(unsigned char Opcode, unsigned short Address)
@@ -1384,29 +1377,29 @@ void CALL(unsigned char Opcode, unsigned short Address)
     // NZ
     if (Opcode == 0xC4 && FLAG_ISSET(FLAG_ZERO))
     {
-        CreateBox("test fail");
-        currentcycles -= 3;
+
+        cyclesRegained -= 3;
         return;
     } // subtract one cycle
     // NC
     if (Opcode == 0xD4 && FLAG_ISSET(FLAG_CARRY))
     {
-        CreateBox("test fail");
-        currentcycles -= 3;
+
+        cyclesRegained -= 3;
         return;
     }
     // Z
     if (Opcode == 0xCC && !FLAG_ISSET(FLAG_ZERO))
     {
-        CreateBox("test fail");
-        currentcycles -= 3;
+
+        cyclesRegained -= 3;
         return;
     }
     // C
     if (Opcode == 0xDC && !FLAG_ISSET(FLAG_CARRY))
     {
-        CreateBox("test fail");
-        currentcycles -= 3;
+
+        cyclesRegained -= 3;
         return;
     }
 
@@ -1422,28 +1415,28 @@ void RET(unsigned char Opcode)
 
                 registers.PC = ReadStack();
 
-            } else currentcycles -= 3;
+            } else cyclesRegained -= 3;
             break;
         case 0xD0:
             if(!FLAG_ISCARRY){
 
                 registers.PC = ReadStack();
 
-            } else currentcycles -= 3;
+            } else cyclesRegained -= 3;
             break;
         case 0xC8:
             if(FLAG_ISZERO){
 
                 registers.PC = ReadStack();
 
-            } else currentcycles -= 3;
+            } else cyclesRegained -= 3;
             break;
         case 0xD8:
             if(FLAG_ISCARRY){
 
                 registers.PC = ReadStack();
 
-            } else currentcycles -= 3;
+            } else cyclesRegained -= 3;
             break;
         case 0xC9:
             registers.PC = ReadStack();
@@ -1897,26 +1890,29 @@ void HandleInterrupt(void)
 void Update(void)
 { // gpu step
 
-    const int MAXCYCLES = 69905;
-    currentcycles = 0;
-    
+    const int MAXCYCLES = (69905 / 4); //M cycles per 1/60th of second
+    unsigned int currentcycles = 0;
+
 
     while (currentcycles < MAXCYCLES)
     {
-
+       
+        
         int cycles = realtimeDebug();
+
+        cycles += cyclesRegained; //after failed jmp, resets
+        cyclesRegained = 0;
+
         currentcycles += cycles;
-        // UpdateGraphics(cycles);
+
+        UpdateGraphics(cycles);
         
         UpdateTiming(cycles);
+
         HandleInterrupt();
 
     }
 
-    frame++;
-    // instSkips = 0;
-    // CreateBox("frame");
-    // instSkips = 1;
 }
 
 void UpdateTiming(int cycles)
@@ -1927,24 +1923,32 @@ void UpdateTiming(int cycles)
     if (IsClockEnabled())
     {
 
-        m_timercounter -= (cycles * 4);
+        timercounter -= (cycles * 4); // 4 * M = T states
 
-        if (m_timercounter <= 0)
+        if (timercounter <= 0)
         {
-
-            m_timercounter = CLOCKSPEED / GetFrequency();
-
+            int overflow = (-1 * timercounter); //incase of missed subtraction
+            timercounter = CLOCKSPEED / GetFrequency();
+            timercounter -= overflow;
         
             if (timer.TIMA == 255)
             {
                 timer.TIMA = timer.TMA;
+                // if(registers.PC == 0xC2C9)
+                // {
+                //     printf("(in timer) A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
+                //             registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+                //             ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
 
+                // }
                 RequestInterrupt(2);
+                //if(registers.PC > 0xC200) printf("IF: %X\n", interrupt.flag);
             }
             else
             {
                 timer.TIMA++;
             }
+
         }
     }
 }
@@ -1952,14 +1956,17 @@ void UpdateTiming(int cycles)
 void UpdateDivider(int cycles)
 {
 
-    m_dividercounter -= cycles;
+    dividercounter -= (cycles * 4);
 
-    if (m_dividercounter <= 0)
+    if (dividercounter <= 0)
     {
+        int overflow = (-1 * dividercounter);
+        dividercounter = 256; //64 M cycles per tick
+        dividercounter -= overflow;
 
-        m_dividercounter = 256;
         timer.DIV++;
     }
+
 }
 
 int IsClockEnabled()
@@ -1969,6 +1976,7 @@ int IsClockEnabled()
 
 int GetFrequency()
 {
+
     int frequency;
     frequency = (timer.TAC & 0x03);
     switch (frequency)
@@ -1980,6 +1988,7 @@ int GetFrequency()
     case 2:
         return 65536;
     case 3:
-        return 16384;
+        return 16384; //256 ticks, 64 M cycles
     }
+
 }
