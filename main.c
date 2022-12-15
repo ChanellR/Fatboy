@@ -8,6 +8,12 @@
 #include "control.h"
 #include "display.h"
 #include "gpu.h"
+#include "src\include\SDL2\SDL_syswm.h"
+
+#define WM_MESSAGE(x) (x.syswm.msg->msg.win)
+#define IDM_FILE_NEW 1
+#define IDM_FILE_OPEN 2
+#define IDM_FILE_QUIT 3
 
 int WindowWidth = 160 * 5;
 int WindowHeight = 144 * 5;
@@ -30,13 +36,72 @@ void Test (void)
     exit(0);
 }
 
+HWND getSDLWinHandle(SDL_Window* win)
+{
+    SDL_SysWMinfo infoWindow;
+    SDL_VERSION(&infoWindow.version);
+    if (!SDL_GetWindowWMInfo(win, &infoWindow))
+    {
+        printf("test");
+        return NULL;
+    }
+    return (infoWindow.info.win.window);
+}
+
+void CreateMenuBar (HWND hwnd)
+{
+
+    HMENU hMenubar;
+    HMENU hMenu;
+
+    hMenubar = CreateMenu();
+    hMenu = CreateMenu();
+
+
+    AppendMenuW(hMenu, MF_STRING, IDM_FILE_OPEN, L"&Open");
+    AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hMenu, MF_STRING, IDM_FILE_QUIT, L"&Quit");
+
+    AppendMenuW(hMenubar, MF_POPUP, (UINT_PTR) hMenu, L"&File");
+    SetMenu(hwnd, hMenubar);
+
+}
+
+void OpenDialog(HWND hwnd) {
+
+  OPENFILENAME ofn;
+  TCHAR szFile[MAX_PATH];
+
+  ZeroMemory(&ofn, sizeof(ofn));
+  ofn.lStructSize = sizeof(ofn);
+  ofn.lpstrFile = szFile;
+  ofn.lpstrFile[0] = '\0';
+  ofn.hwndOwner = hwnd;
+  ofn.nMaxFile = sizeof(szFile);
+  ofn.lpstrFilter = TEXT("All files(*.*)\0*.*\0");
+  ofn.nFilterIndex = 1;
+  ofn.lpstrInitialDir = NULL;
+  ofn.lpstrFileTitle = NULL;
+  ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+  if(GetOpenFileNameA(&ofn))
+  {
+      Reset();  
+      LoadRom(ofn.lpstrFile);
+  }
+
+}
+
+
 void DrawViewport (SDL_Renderer* renderer, SDL_Texture* texture)
 {
     int W = WindowWidth;
     int H = WindowHeight;
 
     SDL_RenderClear(renderer);
-    SDL_UpdateTexture(texture, NULL, LoadTilesFromMap(0x9800, 0x8000), 256*3);
+    SDL_UpdateTexture(texture, NULL, DisplayPixels, 256*3); //changed for logo
+    
+
     
     if((lcd.SCX + 144) >= 256 && (lcd.SCY + 160) >= 256) //scrolling bothways
     {
@@ -102,17 +167,17 @@ void DrawViewport (SDL_Renderer* renderer, SDL_Texture* texture)
 
 }
 
-// void PushDrawEvent (void) 
-// {
-//     SDL_PushEvent() 
-// }
+
 
 int main(int argc, char** argv){
 
-    LoadRom();
+    int fps = 60;
+    int DesiredDelta = 1000 / fps;
+
+
+    LoadRom("panda.gb");
     Reset();
-    remove("Log.txt");
-    // Test();
+    //remove("Log.txt");
 
     if(SDL_Init(SDL_INIT_VIDEO) < 0){
         printf("Error: SDL failed to initialize\nSDL Error: '%s'\n", SDL_GetError());
@@ -126,38 +191,60 @@ int main(int argc, char** argv){
         printf("Error: Failed to open window\nSDL Error: '%s'\n", SDL_GetError());
         return 1;
     }
-
+    
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if(!renderer){
         printf("Error: Failed to create renderer\nSDL Error: '%s'\n", SDL_GetError());
         return 1;
     }
 
-    
     SDL_Texture * texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, 
                                             SDL_TEXTUREACCESS_STREAMING, 256, 256);
 
-    unsigned char NfromLog[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                0xF0, 0x00, 0xF0, 0x00, 0xFC, 0x00, 0xFC, 0x00, 
-                                0xFC, 0x00, 0xFC, 0x00, 0xF3, 0x00, 0xF3, 0x00};
+    HWND WindowHandler = getSDLWinHandle(window);
+      
     
-    
-    memcpy(VRAM, NfromLog, 32);
-    //WriteByte(0x9800, 0x01);
-
-    
+    SDL_EventState(SDL_SYSWMEVENT, SDL_ENABLE);
+    CreateMenuBar(WindowHandler);
 
     bool running = true;
     while(running){
 
+        int startLoop = SDL_GetTicks();
 
         SDL_Event event;
         while(SDL_PollEvent(&event)){
 
             switch(event.type){
-                
-                
+            
+
+                case SDL_SYSWMEVENT:
+                    
+                    if (WM_MESSAGE(event).msg == WM_CREATE) ;
+
+                    
+                    if (WM_MESSAGE(event).msg == WM_COMMAND)
+                    {
+                        switch (LOWORD(WM_MESSAGE(event).wParam))
+                        {
+
+                            case IDM_FILE_OPEN:
+
+                                MessageBeep(MB_ICONINFORMATION);
+                                OpenDialog(WindowHandler);
+                                break;
+                                
+                            break;
+                  
+                            case IDM_FILE_QUIT:
+                            
+                                SendMessage(WindowHandler, WM_CLOSE, 0, 0);
+                                break; 
+                        }
+                    }
+
+                    break;
+                    
                 case SDL_QUIT:
 
                     SDL_DestroyTexture(texture);
@@ -173,13 +260,14 @@ int main(int argc, char** argv){
             
         }
         
-        
+
         DrawViewport(renderer, texture);
-        Update(); //assuming this takes and insignificant amount of time
-        // Sleep(1000/60);
-        
-        
-        // LoadTilesFromMap(0x9800, 0x8000)
+        Update(); //assuming this takes an insignificant amount of time
+        LoadTilesFromMap();
+        int delta = SDL_GetTicks() - startLoop;
+        if(delta < DesiredDelta) SDL_Delay(DesiredDelta - delta);
+
+
     }
 
     return 0;

@@ -190,7 +190,7 @@ int IsClockEnabled(void);
 void UpdateDivider (int cycles);
 void UpdateTiming (int cycles);
 void RequestInterrupt(int val);
-void LoadRom (void);
+void LoadRom (char * Filename);
 void Update (void);
 
 void Reset (void);

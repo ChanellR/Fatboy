@@ -10,7 +10,10 @@
 
 struct LCD lcd;
 int ScanlineCounter = 456; //456 cycles per scan line, there is a 146 vblank buffer
+unsigned char DisplayPixels [160 * 144 * 3];
+
 unsigned char* GetPixelColor (unsigned char bit1, unsigned char bit2);
+
 
 void UpdateGraphics (int cycles) {
 
@@ -37,10 +40,14 @@ void UpdateGraphics (int cycles) {
         } else if (lcd.LY > 153) {
             
             lcd.LY = 0; //reset if outside range
+            
 
         } else if (lcd.LY < 144) {
             
-            //DrawScanline(); //this will add a line to the render buffer
+
+            DrawScanline(); //this will add a line to the render buffer
+            // LoadTilesFromMap();
+
         }
 
     } 
@@ -126,8 +133,9 @@ void SetLCDstatus (void) {
 
 void DrawScanline(void) {
 
-    if(lcd.control & 0x01) {
-        // LoadTileData();
+    if(lcd.control & 0x80) {
+        
+        LoadLineFromMap();
     } 
     
     if (lcd.control & 0x02) {
@@ -157,9 +165,9 @@ unsigned char * LoadNintendoLogo (void){
         int offset = (i > 3) ? i * 3 + (44 * 3) : i * 3;
         unsigned char color = (byte & (0x80>>i)) ? 0x0 : 0xFF;
 
-        PixelBatch[offset + tileOffset] = color;
-        PixelBatch[offset + tileOffset + 1] = color;
-        PixelBatch[offset + tileOffset + 2] = color;
+        DisplayPixels[offset + tileOffset] = color;
+        DisplayPixels[offset + tileOffset + 1] = color;
+        DisplayPixels[offset + tileOffset + 2] = color;
         
         }
     }
@@ -167,11 +175,14 @@ unsigned char * LoadNintendoLogo (void){
     return PixelBatch;
 }
 
-unsigned char * LoadTilesFromMap (unsigned short MapAddress, unsigned short DataAddress)
+unsigned char * LoadTilesFromMap (void)
 {   
     //displays all tiles currently mapped in the BG, doesn't hold scanline functionality but makes sense. 
     //returns 8 x 8 pixel bitmap
     //unsigned only 0x8000-
+    unsigned short MapAddress = 0x9800; 
+    unsigned short DataAddress =  0x8000;
+
     static unsigned char Pixels[256 * 256 * 3]; //whole ting
     unsigned short TileIDAddress = MapAddress;
     //BG
@@ -204,9 +215,9 @@ unsigned char * LoadTilesFromMap (unsigned short MapAddress, unsigned short Data
                 unsigned char *colors;
                 colors = GetPixelColor(bit1, bit2);
 
-                Pixels[tileOffset + lineoffset + PixelOffset] = GetPixelColor(bit1, bit2)[0];
-                Pixels[tileOffset + lineoffset + PixelOffset + 1] = GetPixelColor(bit1, bit2)[1];
-                Pixels[tileOffset + lineoffset + PixelOffset + 2] = GetPixelColor(bit1, bit2)[2];
+                DisplayPixels[tileOffset + lineoffset + PixelOffset] = GetPixelColor(bit1, bit2)[0];
+                DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = GetPixelColor(bit1, bit2)[1];
+                DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = GetPixelColor(bit1, bit2)[2];
                 
             }
         }
@@ -215,6 +226,67 @@ unsigned char * LoadTilesFromMap (unsigned short MapAddress, unsigned short Data
     return Pixels;
 }
    
+unsigned short GetBGMAPAddress (void) 
+{
+    unsigned short address = (lcd.control & 0x08) ? 0x9C00 : 0x9800;
+    return address;
+}
+
+unsigned short GetDataAddress (void) 
+{
+    unsigned short address = (lcd.control & 0x10) ? 0x8000 : 0x8800;
+    return address;
+}
+
+
+void LoadLineFromMap (void)
+{
+    // unsigned short MapAddress = (lcd.control) ? GetBGMAPAddress() : 0x9800; 
+    // unsigned short DataAddress = (lcd.control) ? GetDataAddress() : 0x8000;
+    unsigned short MapAddress = 0x9800; 
+    unsigned short DataAddress =  0x8000;
+
+    unsigned short TileIDAddress = MapAddress;
+    //find the first tile in the line and the last one
+    int firstTile = (((unsigned char)(lcd.LY + lcd.SCY) / 8) * 32); //num of first tile in line
+    int lastTile = (((unsigned char)(lcd.LY + lcd.SCY) / 8) * 32) + 32; // char so it scrolls
+
+    for (int tile = firstTile; tile < lastTile; tile++)
+    {
+        int tileOffset = (tile % 32) * 8 * 3 + ((tile / 32) * 256 * 3 * 8); //row then coloumn
+
+        unsigned char TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(TileIDAddress + tile) : (signed char) ReadByte(TileIDAddress + tile);
+        unsigned short TileDataAddress = DataAddress;
+
+        int offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 127) * 16);
+        TileDataAddress += (offset); 
+
+        int line = (lcd.LY + lcd.SCY) % 8;
+        int lineoffset = line * (256) * 3;// moves back to first spot
+
+        unsigned char byte1 = ReadByte( TileDataAddress + line * 2); //off set by their position in the tile
+        unsigned char byte2 = ReadByte( TileDataAddress + line * 2 + 1 );
+
+        for(int pixel = 0; pixel < 8; pixel++)
+        {
+            
+            int PixelOffset = pixel * 3;
+
+            unsigned char bit1 = (byte1 & (0x80 >> pixel));
+            unsigned char bit2 = (byte2 & (0x80 >> pixel));
+
+            unsigned char *colors;
+            colors = GetPixelColor(bit1, bit2);
+
+            DisplayPixels[tileOffset + lineoffset + PixelOffset] = GetPixelColor(bit1, bit2)[0];
+            DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = GetPixelColor(bit1, bit2)[1];
+            DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = GetPixelColor(bit1, bit2)[2];
+            
+        }
+        
+    }
+}
+
 unsigned char * GetPixelColor (unsigned char bit1, unsigned char bit2)
 {
 

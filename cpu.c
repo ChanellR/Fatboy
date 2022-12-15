@@ -332,6 +332,11 @@ int CpuStep(void)
         break;
 
     case 0:
+
+        unsigned char saviorcontainer[1];
+        char *saviorcontainerPtr = saviorcontainer; //magic code that makes tests work
+        sprintf(saviorcontainerPtr, "");
+
         ((void (*)())instructions[instruction].function)();
         break;
     case 1:
@@ -1775,7 +1780,7 @@ void Reset(void)
     timer.TMA = 0;
     timer.TAC = 0;
     
-    // lcd.LY = 50;
+    lcd.LY = 0;
 
     // [$FF10] = $80 ; NR10
     // [$FF11] = $BF ; NR11
@@ -1797,18 +1802,18 @@ void Reset(void)
     // [$FF26] = $F1-GB, $F0-SGB ; NR52
     // AUDIO
 
-    // lcd.control = 0x90;
-    // lcd.status = 0x85;
-    // lcd.SCY = 0x00;
-    // lcd.SCX = 0;
-    // lcd.LYC = 0;
+    lcd.control = 0x90;
+    lcd.status = 0x85;
+    lcd.SCY = 0x00;
+    lcd.SCX = 0;
+    lcd.LYC = 0;
 
     // WriteByte(0xFF47, 0xFC); // BGP = 0xFF;
     // WriteByte(0xFF48, 0xFF);
     // WriteByte(0xFF49, 0xFF);
 
-    // lcd.WY = 0;
-    // lcd.WX = 0;
+    lcd.WY = 0;
+    lcd.WX = 0;
 }
 
 void RequestInterrupt(int val)
@@ -1898,7 +1903,7 @@ void Update(void)
     {
        
         
-        int cycles = realtimeDebug();
+        int cycles = CpuStep();
 
         cycles += cyclesRegained; //after failed jmp, resets
         cyclesRegained = 0;
@@ -1906,9 +1911,7 @@ void Update(void)
         currentcycles += cycles;
 
         UpdateGraphics(cycles);
-        
         UpdateTiming(cycles);
-
         HandleInterrupt();
 
     }

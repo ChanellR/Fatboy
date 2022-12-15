@@ -1,5 +1,5 @@
 
-gcc -Isrc/Include -Lsrc/lib -o main main.c display.c control.c cpu.c gpu.c memory.c -lmingw32 -lSDL2main -lSDL2
+gcc -Isrc/Include -Lsrc/lib -o main main.c display.c control.c cpu.c gpu.c memory.c -lmingw32 -lSDL2main -lSDL2 -lcomdlg32
 
 Notes:
     pass the loop by fixing LY  
@@ -65,3 +65,8 @@ Now we move to testing timing.
 BD:254-2 CB BE:254-4 CB BF:254-2 CB C0:254-2 CB C1:254-2 CB C2:254-2 CB C3:254-2 CB C4:254-2 CB C5:254-2 CB C6:254-4 CB C7:254-2 CB C8:254-2 CB C9:254-2 CB CA:254-2 CB CB:254-2 CB CC:254-2 CB CD:254-2 CB CE:254-4 CB CF:254-2 CB D0:254-2 CB D1:254-2 CB D2:254-2 CB D3:254-2 CB D4:254-2 CB D5:254-2 CB D6:254-4 CB D7:254-2 CB D8:254-2 CB D9:254-2 CB DA:254-2 CB DB:254-2 CB DC:254-2 CB DD:254-2 CB DE:254-4 CB DF:254-2 CB E0:254-2 CB E1:254-2 CB E2:254-2 CB E3:254-2 CB E4:254-2 CB E5:254-2 CB 
 E6:254-4 CB E7:254-2 CB E8:254-2 CB E9:254-2 CB EA:254-2 CB EB:254-2 CB EC:254-2 CB ED:254-2 CB EE:254-4 CB EF:254-2 CB F0:254-2 CB F1:254-2 CB F2:254-2 CB F3:254-2 CB F4:254-2 CB F5:254-2 CB F6:254-4 CB F7:254-2 CB F8:254-2 CB F9:254-2 CB FA:254-2 CB FB:254-2 CB FC:254-2 CB FD:254-2 CB FE:254-4 CB FF:254-2 
 Failed
+
+------------------12/14
+
+leaving timing, working towards actually scanline printing
+HUD, menus.
