@@ -55,4 +55,5 @@ struct joypad {
 
         };
     };
+    
 }extern joypad;

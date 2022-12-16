@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <string.h>
+
 
 #include "header.h"
 #include "memory.h"
@@ -35,6 +37,77 @@ unsigned char OAM[0xA0]; //FE00 - FE9F
 unsigned char IO[0x80]; //FF00 - FF7F
 unsigned char HRAM[(0xFFFE - 0xFF7F + 1)]; //FF80 - FFFE
 
+char Title[16];
+
+void Reset(void)
+{
+
+    memset(VRAM, 0, 0x2000);
+    memset(WRAM, 0, 0x2000);
+    memset(DisplayPixels, 0, 256 * 256 * 3);
+
+    registers.A = 0x01;
+    registers.F = 0xB0; // If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
+    registers.B = 0x00; // for the bmg pokemon red start
+    registers.C = 0x13;
+    registers.D = 0x00;
+    registers.E = 0xD8;
+    registers.H = 0x01;
+    registers.L = 0x4D;
+    registers.SP = 0xfffe;
+    registers.PC = 0x100;
+
+    joypad.keys = 0xFF;
+
+    interrupt.master = 0;
+    interrupt.enable = 0;
+    interrupt.flag = 0x01;
+
+
+
+    timer.DIV = 0xAB;
+    timer.TIMA = 0;
+    timer.TMA = 0;
+    timer.TAC = 0xF8;
+    
+    lcd.LY = 0;
+
+    
+    // [$FF10] = $80 ; NR10
+    // [$FF11] = $BF ; NR11
+    // [$FF12] = $F3 ; NR12
+    // [$FF14] = $BF ; NR14
+    // [$FF16] = $3F ; NR21
+    // [$FF17] = $00 ; NR22
+    // [$FF19] = $BF ; NR24
+    // [$FF1A] = $7F ; NR30
+    // [$FF1B] = $FF ; NR31
+    // [$FF1C] = $9F ; NR32
+    // [$FF1E] = $BF ; NR33
+    // [$FF20] = $FF ; NR41
+    // [$FF21] = $00 ; NR42
+    // [$FF22] = $00 ; NR43
+    // [$FF23] = $BF ; NR30
+    // [$FF24] = $77 ; NR50
+    // [$FF25] = $F3 ; NR51
+    // [$FF26] = $F1-GB, $F0-SGB ; NR52
+    // AUDIO
+
+    lcd.control = 0x91;
+    lcd.status = 0x85;
+    lcd.SCY = 0x00;
+    lcd.SCX = 0;
+    lcd.LYC = 0;
+    lcd.WY = 0;
+    lcd.WX = 0;
+
+    // WriteByte(0xFF47, 0xFC); // BGP = 0xFF;
+    // WriteByte(0xFF48, 0xFF);
+    // WriteByte(0xFF49, 0xFF);
+
+   
+}
+
 void LogMemory (void) 
 {
 
@@ -53,6 +126,19 @@ void LogMemory (void)
 
     fclose(ptr);
     
+
+}
+
+void LoadRomTitle (void)
+{
+    
+    for (int i = 0; i < 0x0010; i++)
+    {
+        
+        Title[i] = ROMBANKS[0x134+i];
+        
+        
+    }
 }
 
 void LoadRom (char * Filename)
@@ -63,9 +149,11 @@ void LoadRom (char * Filename)
     //Reads all x8000 bytes of Rom data
     // fread(ROMBANK0, 0x4000, 1, f);
     fread(ROMBANKS, 0x4000, 64, f);
-
-    printf("Completed Loading Rom \n");
+    printf("Completed Loading Rom: %s \n", Filename);
+    LoadRomTitle();
     fclose(f);
+
+    RomLoaded = 1;
 }
 
 unsigned char ReadByte (unsigned short Address) 
@@ -307,7 +395,9 @@ void WriteByte (unsigned short Address, unsigned char value)
             lcd.status = 0x80;
 
         case 0xFF42:
+
             lcd.SCY = value;
+
             break;
         case 0xFF43:
             lcd.SCX = value;

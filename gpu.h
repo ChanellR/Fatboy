@@ -1,7 +1,8 @@
 #pragma once
 
-extern unsigned char DisplayPixels [160 * 144 * 3]; //row, pixel, color
+extern unsigned char DisplayPixels [256 * 256 * 3]; //row, pixel, color
 extern int ScanlineCounter;
+extern int printLine;
 
 struct LCD {
     unsigned char control; //FF40
@@ -19,9 +20,10 @@ int IsLcdOn (void);
 void SetLCDstatus(void);
 void DrawScanline(void);
 unsigned char * LoadNintendoLogo (void);
-unsigned char * LoadTilesFromMap (void);
+void LoadTilesFromMap (void);
 void LoadLineFromMap (void);
 void RenderSprites(void);
+void LoadSpriteSheet (void);
 
 unsigned short GetBGMAPAddress (void);
 unsigned short GetDataAddress (void);

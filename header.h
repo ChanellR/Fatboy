@@ -1,4 +1,5 @@
 #pragma once
+#include <stdbool.h>
 //taken from CINOOP, good organization
 
 #define FLAG_ZERO (0x80)
@@ -19,6 +20,8 @@
 extern int timercounter;
 extern int dividercounter;
 extern int ScanlineCounter;
+extern char CurrentRom[40];
+extern int RomLoaded;
 
 struct registers {
 

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
 #include "header.h"
 #include "memory.h"
 #include "control.h"
@@ -675,7 +676,8 @@ void load8bit(unsigned char Opcode, unsigned char operand)
     switch (Opcode)
     {
     case 0xE0:
-        
+
+
         WriteByte(0xFF00 + operand, registers.A);
         break;
     case 0xF0:
@@ -683,6 +685,9 @@ void load8bit(unsigned char Opcode, unsigned char operand)
         //if(Opcode == 0xF0 && operand == 0x0F) printf("A: %02X\n", registers.A);
         break;
     case 0xE2:
+        
+
+      
         WriteByte(0xFF00 + registers.C, registers.A);
         break;
     case 0xF2:
@@ -700,6 +705,7 @@ void load8bit(unsigned char Opcode, unsigned char operand)
         break;
     case 0x36:
         WriteByte(registers.HL, operand);
+       
         break;
 
     case 0x0E: // ld (C) A
@@ -738,6 +744,8 @@ void load16bit(unsigned char Opcode, unsigned short operand)
         break;
     case 0xEA:
         WriteByte(operand, registers.A);
+       
+
         break;
     case 0xFA:
         registers.A = ReadByte(operand);
@@ -1758,63 +1766,7 @@ unsigned char BIT(unsigned char bit, unsigned char byte, unsigned char OP)
     return byte;
 }
 
-void Reset(void)
-{
 
-    registers.A = 0x01;
-    registers.F = 0xB0; // If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
-    registers.B = 0x00; // for the bmg pokemon red start
-    registers.C = 0x13;
-    registers.D = 0x00;
-    registers.E = 0xD8;
-    registers.H = 0x01;
-    registers.L = 0x4D;
-    registers.SP = 0xfffe;
-    registers.PC = 0x100;
-
-    interrupt.master = 0;
-    interrupt.enable = 0;
-    interrupt.flag = 0x01;
-
-    timer.TIMA = 0;
-    timer.TMA = 0;
-    timer.TAC = 0;
-    
-    lcd.LY = 0;
-
-    // [$FF10] = $80 ; NR10
-    // [$FF11] = $BF ; NR11
-    // [$FF12] = $F3 ; NR12
-    // [$FF14] = $BF ; NR14
-    // [$FF16] = $3F ; NR21
-    // [$FF17] = $00 ; NR22
-    // [$FF19] = $BF ; NR24
-    // [$FF1A] = $7F ; NR30
-    // [$FF1B] = $FF ; NR31
-    // [$FF1C] = $9F ; NR32
-    // [$FF1E] = $BF ; NR33
-    // [$FF20] = $FF ; NR41
-    // [$FF21] = $00 ; NR42
-    // [$FF22] = $00 ; NR43
-    // [$FF23] = $BF ; NR30
-    // [$FF24] = $77 ; NR50
-    // [$FF25] = $F3 ; NR51
-    // [$FF26] = $F1-GB, $F0-SGB ; NR52
-    // AUDIO
-
-    lcd.control = 0x90;
-    lcd.status = 0x85;
-    lcd.SCY = 0x00;
-    lcd.SCX = 0;
-    lcd.LYC = 0;
-
-    // WriteByte(0xFF47, 0xFC); // BGP = 0xFF;
-    // WriteByte(0xFF48, 0xFF);
-    // WriteByte(0xFF49, 0xFF);
-
-    lcd.WY = 0;
-    lcd.WX = 0;
-}
 
 void RequestInterrupt(int val)
 {
@@ -1880,12 +1832,12 @@ void HandleInterrupt(void)
         priority = 4;
     }
 
-    if (interrupt.enable & currentFlag)
+    if (interrupt.enable && (currentFlag & interrupt.enable))
     {
+        if(priority == 4) joypad.keys = 0xFF; //reset joypad
 
         interrupt.master = 0;
         interrupt.flag &= ~(currentFlag);
-        interrupt.enable &= ~(currentFlag);
 
         CALL(0x00, InterruptAddress[priority]);
 
@@ -1894,6 +1846,8 @@ void HandleInterrupt(void)
 
 void Update(void)
 { // gpu step
+
+    if(RomLoaded == false) return;
 
     const int MAXCYCLES = (69905 / 4); //M cycles per 1/60th of second
     unsigned int currentcycles = 0;
@@ -1913,7 +1867,7 @@ void Update(void)
         UpdateGraphics(cycles);
         UpdateTiming(cycles);
         HandleInterrupt();
-
+        
     }
 
 }
