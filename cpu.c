@@ -5,7 +5,7 @@
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "display.h"
+#include "Debugging.h"
 #include "gpu.h"
 
 
@@ -17,6 +17,7 @@
 struct timer timer;
 struct interrupt interrupt;
 struct registers registers;
+struct joypad joypad;
 //number of Updates performed. 
 int cyclesRegained; //regained after failed jmp
 
@@ -309,7 +310,6 @@ const struct Instruction instructions[256] = {
 
 int CpuStep(void)
 {
-    CreateBox();
 
     unsigned char instruction = ReadByte(registers.PC++);
 
@@ -1766,8 +1766,6 @@ unsigned char BIT(unsigned char bit, unsigned char byte, unsigned char OP)
     return byte;
 }
 
-
-
 void RequestInterrupt(int val)
 {
     // printf("Request with Value: %d\n", val);
@@ -1832,22 +1830,37 @@ void HandleInterrupt(void)
         priority = 4;
     }
 
-    if (interrupt.enable && (currentFlag & interrupt.enable))
+    if (interrupt.master && (currentFlag & interrupt.enable))
     {
-        if(priority == 4) joypad.keys = 0xFF; //reset joypad
+         //reset joypad
 
         interrupt.master = 0;
         interrupt.flag &= ~(currentFlag);
 
         CALL(0x00, InterruptAddress[priority]);
+        
 
-    } // interrupt call
+    } 
+    // interrupt call
 }
+
+int Outputinstructions (void){
+
+    char debugMessage[8000];
+    char *debugMessageP = debugMessage;
+    debugMessageP += sprintf(debugMessageP, "A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
+                            registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+                            ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+
+    printf("%s", debugMessage);
+
+}
+	
 
 void Update(void)
 { // gpu step
 
-    if(RomLoaded == false) return;
+    if(RomLoaded == 0) return;
 
     const int MAXCYCLES = (69905 / 4); //M cycles per 1/60th of second
     unsigned int currentcycles = 0;
@@ -1855,8 +1868,10 @@ void Update(void)
 
     while (currentcycles < MAXCYCLES)
     {
-       
         
+        // joypad.keys &= ~(0x08);
+        // RequestInterrupt(4);
+        //Outputinstructions();
         int cycles = CpuStep();
 
         cycles += cyclesRegained; //after failed jmp, resets
@@ -1869,7 +1884,8 @@ void Update(void)
         HandleInterrupt();
         
     }
-
+    //Reset after a frame has passed
+    //joypad.keys = 0xFF;
 }
 
 void UpdateTiming(int cycles)

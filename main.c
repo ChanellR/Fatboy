@@ -6,7 +6,7 @@
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "display.h"
+#include "Debugging.h"
 #include "gpu.h"
 #include "src\include\SDL2\SDL_syswm.h"
 
@@ -26,7 +26,7 @@ int RomLoaded = 0;
 
 void Test (void) 
 {
-    registers.AF = 0x0000;
+    registers.AF = 0x0A11;
     registers.BC = 0x1200;
     registers.DE = 0x0000;
     registers.HL = 0xC304;
@@ -105,7 +105,7 @@ void OpenDialog(HWND hwnd) {
   {
     Reset();  
     LoadRom(ofn.lpstrFile);
-    LoadTilesFromMap();
+    //LoadTilesFromMap();
 
   }
 
@@ -143,6 +143,7 @@ int main(int argc, char** argv){
     int ViewSpriteSheet = 0;
     
     Reset();
+    //Test();
 
     if(SDL_Init(SDL_INIT_VIDEO) < 0){
         printf("Error: SDL failed to initialize\nSDL Error: '%s'\n", SDL_GetError());
@@ -252,57 +253,57 @@ int main(int argc, char** argv){
                                 case VK_LEFT:
 
                                     
-                                    joypad.keys &= ~0x22;
-                                    RequestInterrupt(4);
+                                    // joypad.keys &= ~0x22;
+                                    // RequestInterrupt(4);
                                     break;
 
                                 case VK_RIGHT:
 
                                     
-                                    joypad.keys &= ~0x21;
-                                    RequestInterrupt(4);
+                                    // joypad.keys &= ~0x21;
+                                    // RequestInterrupt(4);
                                     break;
 
                                 case VK_UP:
 
                                     
-                                    joypad.keys &= ~0x24;
-                                    RequestInterrupt(4);
+                                    // joypad.keys &= ~0x24;
+                                    // RequestInterrupt(4);
                                     break;
 
                                 case VK_DOWN:
 
                                     
-                                    joypad.keys &= ~0x28;
-                                    RequestInterrupt(4);
+                                    //joypad.keys &= ~0x28;
+                                    //RequestInterrupt(4);
                                     break;
                                 
                                 case VK_RETURN:
                                     //start
                                     
-                                    joypad.keys &= ~0x18;
-                                    RequestInterrupt(4);
+                                    // joypad.keys &= ~0x18;
+                                    // RequestInterrupt(4);
                                     break;
 
                                 case VK_SHIFT:
                                     //select
                                     
-                                    joypad.keys &= ~0x14;
-                                    RequestInterrupt(4);
+                                    // joypad.keys &= ~0x14;
+                                    // RequestInterrupt(4);
                                     break;
 
                                 case 0x5A: //Z (A)
 
                                     
-                                    joypad.keys &= ~0x11;
-                                    RequestInterrupt(4);
+                                    // joypad.keys &= ~0x11;
+                                    // RequestInterrupt(4);
                                     break;
 
                                 case 0x58: //X (B)
 
                                     
-                                    joypad.keys &= ~0x12;
-                                    RequestInterrupt(4);
+                                    // joypad.keys &= ~0x12;
+                                    // RequestInterrupt(4);
                                     break;
                             }
 
@@ -325,15 +326,21 @@ int main(int argc, char** argv){
             }
             
         }
-        
-        
-        Update(); //assuming this takes an insignificant amount of time
 
-        //  
-        if(ViewSpriteSheet) {memset(DisplayPixels, 0, 256 * 256 * 3); LoadSpriteSheet();}
-        LoadTilesFromMap();
-        DrawViewportWithScrolling(renderer, texture, Viewport);
-        
+        if(RomLoaded){
+            
+            //LoadTilesFromMap();
+            //printf("joypad: %02X\n", joypad.keys);
+            Update(); 
+            if(ViewSpriteSheet && RomLoaded) {memset(DisplayPixels, 0, 256 * 256 * 3); LoadSpriteSheet();}
+            
+            
+            
+            //LoadTilesFromMap();
+            LoadSpritesOnScreen();
+            DrawViewportWithScrolling(renderer, texture, Viewport);
+
+        }
 
         int delta = SDL_GetTicks() - startLoop;
         if(delta < DesiredDelta) SDL_Delay(DesiredDelta - delta);

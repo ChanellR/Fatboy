@@ -5,7 +5,7 @@
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "display.h"
+#include "Debugging.h"
 #include "gpu.h"
 
  //every dot and their hue
@@ -168,14 +168,187 @@ void DrawScanline(void) {
     } 
     
     if (lcd.control & 0x02) {
-        RenderSprites();
+
+
+        LoadSpritesOnScreen();
+
     }
 }
 
-void RenderSprites (void) {
+void LoadSpritesOnScreen (void) {
+    //int UnderBGWIN = lcd.control & 0x01;
+    unsigned char SpriteYPos = 0;
+    unsigned char SpriteXpos = 0;
+    unsigned short DataAddress = 0x8000; //sprites stored 0x8000 - 0x8FFF;
+    unsigned char SpriteHeight = (lcd.control & 0x04) ? 16 : 8; //double or not
+    int spritesloaded = 0;
+    //works but doesn't have attributes nor proper priority;
+
+    for (int SpritetoLoad = 0; SpritetoLoad < 40; SpritetoLoad++) 
+    {
+        SpriteYPos = ReadByte(0xFE00 + SpritetoLoad);
+        if(!(lcd.LY >= (SpriteYPos - 16) && lcd.LY < (SpriteYPos - 16 + SpriteHeight))) return;
+        //if(!(lcd.LY >= 50)) return;
+        spritesloaded++;
+        if(spritesloaded == 11) return;
+        //printf("Spritenum: %i\n", SpritetoLoad);
+
+        SpriteXpos = ReadByte(0xFE00 + SpritetoLoad * 4 + 1);
+        
+        int SpritePixelOffset = (SpriteXpos - 8) * 3;
+
+        unsigned short SpriteDataAddress = DataAddress;
+        
+        int offset = ReadByte(0xFE00 + SpritetoLoad * 4 + 2);
+        //if(offset > 0 && offset != 58) printf("SpriteID: %02X SpriteNum: %i\n", offset, SpritetoLoad);
+        
+        SpriteDataAddress += (offset * 16);
+
+        int lineofSprite = (lcd.LY - (SpriteYPos - 16)); //check functionality across sizes
+
+        int lineoffset = (lcd.LY) * (256) * 3;// should start printing only @lcd.LY independent of positon of lcd.SCY
+
+        unsigned char byte1 = ReadByte( SpriteDataAddress + lineofSprite * 2); //off set by their position in the tile
+        unsigned char byte2 = ReadByte( SpriteDataAddress + lineofSprite * 2 + 1);
+
+        for(int pixel = 0; pixel < 8; pixel++)
+        {
+            
+            int PixelOffset = pixel * 3;
+
+            unsigned char bit1 = (byte1 & (0x80 >> pixel));
+            unsigned char bit2 = (byte2 & (0x80 >> pixel));
+
+            unsigned char *colors;
+            colors = GetPixelColor(bit1, bit2);
+
+            //00 means transparent, so no write
+            if(bit1 || bit2){
+
+                DisplayPixels[SpritePixelOffset + lineoffset + PixelOffset] = colors[0];
+                DisplayPixels[SpritePixelOffset + lineoffset + PixelOffset + 1] = colors[1];
+                DisplayPixels[SpritePixelOffset + lineoffset + PixelOffset + 2] = colors[2];
+
+            }
+            
+            
+        }
+        
+    }
 
 }
 
+void LoadSpriteLine (void) {
+    //int UnderBGWIN = lcd.control & 0x01;
+
+    unsigned short DataAddress = 0x8000; //sprites stored 0x8000 - 0x8FFF;
+    unsigned char LY = lcd.LY;
+
+    int spritecounter = 0;
+    unsigned char ValidSprites[10];
+    unsigned char SpriteHeight = (lcd.control & 0x04) ? 16 : 8; //double or not
+
+    //memset(ValidSprites, 0, 10);
+
+    for (int SpriteNum = 0; SpriteNum < 40; SpriteNum++)
+    {
+        //not reading directly from OAM yet, for whatever reason, i'll figure it out
+        unsigned char SpriteYPos = ReadByte(0xFE00 + ( SpriteNum * 4 )); //top is this -16
+        //is the sprite on LY
+        if(lcd.LY >= (SpriteYPos - 16) && lcd.LY < (SpriteYPos - 16 + SpriteHeight)) 
+        {
+            ValidSprites[spritecounter] = SpriteNum;
+            spritecounter++;
+            
+        }
+
+        if(spritecounter == 10) break;
+
+    }
+
+    
+    unsigned char Xpositions[10];
+    //memset(Xpositions, 0, 10);
+    //populate Xpositions
+    for (int sprite = 0; sprite < 10; sprite++)
+    {   
+        Xpositions[sprite] = ReadByte(0xFE00 + ValidSprites[sprite] * 4 + 1);
+    }
+
+    unsigned char SortedSprites[10];
+    //memset(SortedSprites, 0, 10);
+    //sort the sprites in terms of which will be drawn first so that overlap functions correctly
+    for (int times = 0; times < 10; times++)
+    {
+        int RightMostSprite = 0;
+        int HighestX = -1;
+        
+        for (int sprites = 0; sprites < 10; sprites++){
+
+            int CurrXpos = Xpositions[sprites];
+
+            if((CurrXpos > HighestX)) 
+            {
+                HighestX = CurrXpos;
+                RightMostSprite = sprites;
+            }
+            
+        }
+
+        SortedSprites[times] = RightMostSprite;
+        Xpositions[RightMostSprite] = -1; //clears that sprite from being chosen again.
+    }
+
+    for (int SpritetoLoad = 0; SpritetoLoad < 40; SpritetoLoad++) 
+    {
+
+        //alter to fix filtering 
+        unsigned char SpriteYPos = ReadByte(0xFE00 + SpritetoLoad);
+        if(!(lcd.LY >= (SpriteYPos - 16) && lcd.LY < (SpriteYPos - 16 + SpriteHeight))) return;
+        //spritesloaded++;
+        //if(spritesloaded == 10) return;
+
+        unsigned char SpriteXpos = ReadByte(0xFE00 + SpritetoLoad * 4 + 1);
+        
+        int SpritePixelOffset = (SpriteXpos - 8) * 3;
+
+        unsigned short SpriteDataAddress = DataAddress;
+        int offset = ReadByte(0xFE00 + SpritetoLoad * 4 + 2);
+        SpriteDataAddress += (offset * 16);
+        
+        int lineofSprite = (lcd.LY - (SpriteYPos - 16)); //check functionality across sizes
+
+        int lineoffset = (lcd.LY) * (256) * 3;// should start printing only @lcd.LY independent of positon of lcd.SCY
+
+        unsigned char byte1 = ReadByte( 0x89B0 + lineofSprite * 2); //off set by their position in the tile
+        unsigned char byte2 = ReadByte( 0x89B0 + lineofSprite * 2 + 1);
+
+        for(int pixel = 0; pixel < 8; pixel++)
+        {
+            
+            int PixelOffset = pixel * 3;
+
+            unsigned char bit1 = (byte1 & (0x80 >> pixel));
+            unsigned char bit2 = (byte2 & (0x80 >> pixel));
+
+            unsigned char *colors;
+            colors = GetPixelColor(bit1, bit2);
+
+            //00 means transparent, so no write
+            if(bit1 || bit2){
+
+                DisplayPixels[SpritePixelOffset + lineoffset + PixelOffset] = colors[0];
+                DisplayPixels[SpritePixelOffset + lineoffset + PixelOffset + 1] = colors[1];
+                DisplayPixels[SpritePixelOffset + lineoffset + PixelOffset + 2] = colors[2];
+
+            }
+            
+            
+        }
+        
+    }
+
+}
 
 unsigned char * LoadNintendoLogo (void){
 
@@ -234,9 +407,10 @@ void LoadSpriteSheet (void)
                 unsigned char *colors;
                 colors = GetPixelColor(bit1, bit2);
 
-                DisplayPixels[tileOffset + lineoffset + PixelOffset] = GetPixelColor(bit1, bit2)[0];
-                DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = GetPixelColor(bit1, bit2)[1];
-                DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = GetPixelColor(bit1, bit2)[2];
+                DisplayPixels[tileOffset + lineoffset + PixelOffset] = colors[0];
+                DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = colors[1];
+                DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = colors[2];
+  
                 
             }
         }
@@ -289,9 +463,10 @@ void LoadTilesFromMap (void)
                 unsigned char *colors;
                 colors = GetPixelColor(bit1, bit2);
 
-                DisplayPixels[tileOffset + lineoffset + PixelOffset] = GetPixelColor(bit1, bit2)[0];
-                DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = GetPixelColor(bit1, bit2)[1];
-                DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = GetPixelColor(bit1, bit2)[2];
+                DisplayPixels[tileOffset + lineoffset + PixelOffset] = colors[0];
+                DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = colors[1];
+                DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = colors[2];
+    
                 
             }
         }
@@ -312,7 +487,7 @@ void LoadLineFromMap (void)
     //num of first tile in line with SCX
     
     if(!strcmp(Title, "DR.MARIO")) lcd.SCY = 0;
-    else if(!strcmp(Title, "DMG-ACID2")) lcd.SCY = 0; //unexpected behavior with SCY
+    //else if(!strcmp(Title, "DMG-ACID2")) lcd.SCY = 0; //unexpected behavior with SCY
 
     int Tileshift = (lcd.SCX/8);
 
@@ -330,12 +505,13 @@ void LoadLineFromMap (void)
 
         //if using window, check tile
         int WindowStartingTile = ( (lcd.WX - 7) / 8);
+        // printf("windowstartingtile: %d", WindowStartingTile);
 
-        if(UsingWindow() && (lcd.LY >= lcd.WY) && ((tile % 32) >= WindowStartingTile)) TileIDAddress = (lcd.control) ? GetWINMAPAddress() : 0x9800;
+        if(UsingWindow() && (lcd.LY >= lcd.WY) && ((tile % 32) >= WindowStartingTile)) TileIDAddress = GetWINMAPAddress();
         
-        unsigned char TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(TileIDAddress + tile) : (signed char) ReadByte(TileIDAddress + tile);
+        int TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(TileIDAddress + tile) : (signed char) ReadByte(TileIDAddress + tile);
         int offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 128) * 16);
-
+        
         unsigned short TileDataAddress = DataAddress;
         TileDataAddress += (offset); 
 
@@ -343,7 +519,7 @@ void LoadLineFromMap (void)
         int lineoffset = (lcd.LY) * (256) * 3;// should start printing only @lcd.LY independent of positon of lcd.SCY
 
         unsigned char byte1 = ReadByte( TileDataAddress + line * 2); //off set by their position in the tile
-        unsigned char byte2 = ReadByte( TileDataAddress + line * 2 + 1 );
+        unsigned char byte2 = ReadByte( TileDataAddress + line * 2 + 1 );     
 
         for(int pixel = 0; pixel < 8; pixel++)
         {
@@ -356,9 +532,9 @@ void LoadLineFromMap (void)
             unsigned char *colors;
             colors = GetPixelColor(bit1, bit2);
 
-            DisplayPixels[tileOffset + lineoffset + PixelOffset] = GetPixelColor(bit1, bit2)[0];
-            DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = GetPixelColor(bit1, bit2)[1];
-            DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = GetPixelColor(bit1, bit2)[2];
+            DisplayPixels[tileOffset + lineoffset + PixelOffset] = colors[0];
+            DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = colors[1];
+            DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = colors[2];
             
         }
         
@@ -369,27 +545,60 @@ void LoadLineFromMap (void)
 unsigned char * GetPixelColor (unsigned char bit1, unsigned char bit2)
 {
 
+    struct Pallette {
+
+        union{
+            
+            unsigned char BGP;
+            struct {
+
+            unsigned char index0 : 2;
+            unsigned char index1 : 2;
+            unsigned char index2 : 2;
+            unsigned char index3 : 2;
+
+            };
+        };
+        
+
+    };
+
+    struct Pallette colorway;
+    colorway.BGP = ReadByte(0xFF47);
+
+    static unsigned char Colors[12] = {
+
+        //white, light, dark, black
+        0xE0, 0xF8, 0xD0,
+        0x88, 0xC0, 0x70,
+        0x34, 0x68, 0x56,
+        0x08, 0x18, 0x20
+
+    };
+
+    //{0xE0, 0xF8, 0xD0}
     if (bit1 && bit2) 
     {
-        //black
-        // return (unsigned char []){0x08, 0x18, 0x20};
-        return (unsigned char []){0x08, 0x18, 0x20};
-    } else if (bit1) {
-
-        //light grey
-        return (unsigned char []){0x88, 0xC0, 0x70};
-
+        //index 3
+        
+        return &Colors[colorway.index3 * 3]; 
     } else if (bit2) {
 
-        //dark grey
-        return (unsigned char []){0x34, 0x68, 0x56};
+        //index 2
+        return &Colors[colorway.index2 * 3];  
+
+    } else if (bit1) {
+
+        //index 1
+        return &Colors[colorway.index1 * 3];  
 
     } else {
 
-        //white
-        return (unsigned char []){0xE0, 0xF8, 0xD0};
+        //index 0
+        return &Colors[colorway.index0 * 3];  
 
     } 
+
     
 }
     

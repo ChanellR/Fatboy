@@ -1,5 +1,5 @@
 
-gcc -Isrc/Include -Lsrc/lib -o main main.c display.c control.c cpu.c gpu.c memory.c -lmingw32 -lSDL2main -lSDL2 -lcomdlg32
+gcc -Isrc/Include -Lsrc/lib -o main main.c cpu.c gpu.c memory.c -lmingw32 -lSDL2main -lSDL2 -lcomdlg32
 
 Notes:
     pass the loop by fixing LY  
@@ -70,3 +70,15 @@ Failed
 
 leaving timing, working towards actually scanline printing
 HUD, menus.
+
+
+--12/16
+A: 32 F: 00 B: 00 C: 8A D: 12 E: 30 H: 64 L: F8 SP: DFF5 PC: 00:614D (00 00 00 1B)
+A: 32 F: 00 B: 00 C: 8A D: 12 E: 30 H: 64 L: F8 SP: DFF5 PC: 00:614E (00 00 1B 7A)
+A: 32 F: 00 B: 00 C: 8A D: 12 E: 30 H: 64 L: F8 SP: DFF5 PC: 00:614F (00 1B 7A B3)
+A: 32 F: 00 B: 00 C: 8A D: 12 E: 30 H: 64 L: F8 SP: DFF5 PC: 00:6150 (1B 7A B3 20)
+A: 32 F: 00 B: 00 C: 8A D: 12 E: 2F H: 64 L: F8 SP: DFF5 PC: 00:6151 (7A B3 20 F8)
+A: 12 F: 00 B: 00 C: 8A D: 12 E: 2F H: 64 L: F8 SP: DFF5 PC: 00:6152 (B3 20 F8 C9)
+A: 3F F: 00 B: 00 C: 8A D: 12 E: 2F H: 64 L: F8 SP: DFF5 PC: 00:6153 (20 F8 C9 FA)
+
+loop in pokemon;

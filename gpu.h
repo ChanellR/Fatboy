@@ -22,8 +22,9 @@ void DrawScanline(void);
 unsigned char * LoadNintendoLogo (void);
 void LoadTilesFromMap (void);
 void LoadLineFromMap (void);
-void RenderSprites(void);
+void LoadSpriteLine (void);
 void LoadSpriteSheet (void);
+void LoadSpritesOnScreen (void);
 
 unsigned short GetBGMAPAddress (void);
 unsigned short GetDataAddress (void);

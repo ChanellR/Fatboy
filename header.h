@@ -22,6 +22,7 @@ extern int dividercounter;
 extern int ScanlineCounter;
 extern char CurrentRom[40];
 extern int RomLoaded;
+extern int cyclesRegained;
 
 struct registers {
 

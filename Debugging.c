@@ -4,7 +4,7 @@
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "display.h"
+#include "Debugging.h"
 #include "gpu.h"
 
 
@@ -72,18 +72,17 @@ int CreateBox (void){
     // if(registers.PC >= 0xC33C && registers.PC <= 0xC33F) 
     // {
     
-    // char debugMessage[8000];
-    // char *debugMessageP = debugMessage;
-    // debugMessageP += sprintf(debugMessageP, "memAddr[instruction]: %lu, memAddr[registers.A]: %lu\n", &instruction, &registers.A);
-    // debugMessageP += sprintf(debugMessageP, "A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X) instruction: %02X\n", 
-    //                         registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
-    //                         ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3), instruction);
+    char debugMessage[8000];
+    char *debugMessageP = debugMessage;
+    debugMessageP += sprintf(debugMessageP, "A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X) instruction: %02X\n", 
+                            registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+                            ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3), instruction);
 
-    // FILE *ptr;
+    FILE *ptr;
     
-    // ptr = fopen("Log.txt","a");  
-    // fprintf(ptr, debugMessage);
-    // fclose(ptr);
+    ptr = fopen("Log.txt","a");  
+    fprintf(ptr, debugMessage);
+    fclose(ptr);
     // }
     // if ( (registers.PC == 0xDEFA) || (go == 2)){
     // go++;

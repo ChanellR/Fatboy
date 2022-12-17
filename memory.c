@@ -5,7 +5,7 @@
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "display.h"
+#include "Debugging.h"
 #include "gpu.h"
 
 #define CLOCKSPEED 4194304
@@ -172,7 +172,7 @@ unsigned char ReadByte (unsigned short Address)
 
     } else if (Address >= 0x4000 && Address <= 0x7FFF) 
     {
-
+        //if(currentRomBank > 1)printf("reading ROMMBANK: %i\n", currentRomBank);
         output = ROMBANKS[Address - 0x4000 + ((currentRomBank) * 0x4000)]; //0000 is rombank 1
          
     } else if (Address >= 0x8000 && Address <= 0x9FFF) 
@@ -182,6 +182,7 @@ unsigned char ReadByte (unsigned short Address)
 
     } else if (Address >= 0xA000 && Address <= 0xBFFF) 
     {
+        //printf("reading SRAMBANK: %i", currentSRAMBank);
 
         // if (RAMENABLE) {
             output = SRAMBANKS[Address - 0xA000 + (currentSRAMBank * 0x2000)];
@@ -200,7 +201,12 @@ unsigned char ReadByte (unsigned short Address)
 
         output = WRAM[Address - 0xE000];
 
-    } else if (Address >= 0xFEA0 && Address <= 0xFEFF) 
+    }else if (Address >= 0xFE00 && Address <= 0xFE9F) 
+    {
+        return OAM[Address - 0xFE00];
+
+    } 
+    else if (Address >= 0xFEA0 && Address <= 0xFEFF) 
     {
 
 
@@ -227,8 +233,10 @@ unsigned char ReadByte (unsigned short Address)
             output = timer.TAC;
             break;
         case 0xFF00:
-
+            //printf("reading from keys\n");
+            //printf("keys: %02X\n", joypad.keys);
             output = joypad.keys;
+        
             break;
         case 0xFF0F: //IF
             
@@ -287,6 +295,7 @@ void WriteByte (unsigned short Address, unsigned char value)
     currentRomBank = ((RomBankHi <<5) | (RomBankLo));
     if (currentRomBank == 0) {currentRomBank++;}
 
+
     if (Address <= 0x1FFF)
     { //RAM ENABLE
 
@@ -295,8 +304,9 @@ void WriteByte (unsigned short Address, unsigned char value)
 
     } else if (Address >= 0x2000 && Address <= 0x3FFF) 
     {
-
+        
         RomBankLo = (value & 0x1F);
+        //printf("RomBankLo: %02X from value: %02X\n", RomBankLo, value);
          
     } else if (Address >= 0x4000 && Address <= 0x5FFF) 
     {
@@ -310,6 +320,7 @@ void WriteByte (unsigned short Address, unsigned char value)
         } else {
 
             RomBankHi = value;
+            //printf("RomBankHi: %02X from value: %02X\n", RomBankHi, value);
         }
 
     } else if (Address >= 0x6000 && Address <= 0x7FFF) 
@@ -341,7 +352,11 @@ void WriteByte (unsigned short Address, unsigned char value)
 
         WRAM[Address - 0xC000] = value;
 
-    } else if (Address >= 0xFEA0 && Address <= 0xFEFF) 
+    } else if (Address >= 0xFE00 && Address < 0xFEA0) 
+    {
+        OAM[Address - 0xFE00] = value;
+
+    }else if (Address >= 0xFEA0 && Address <= 0xFEFF) 
     {
         return;
 
@@ -349,13 +364,13 @@ void WriteByte (unsigned short Address, unsigned char value)
     {
 
         switch(Address){
-        case 0xFF02:
-            //blargg testing writing to Serial Link 
-            printf("%c", ReadByte(0xFF01));
-            break;
-        case 0xFF01:
-            IO[01] = value;
-            break;
+        // case 0xFF02:
+        //     //blargg testing writing to Serial Link 
+        //     printf("%c", ReadByte(0xFF01));
+        //     break;
+        // case 0xFF01:
+        //     IO[01] = value;
+        //     break;
         case 0xFF04:
 
             timer.DIV = 0;
@@ -379,7 +394,14 @@ void WriteByte (unsigned short Address, unsigned char value)
             break;
         case 0xFF00:
 
+            //printf("writing to keys\n");
+            unsigned char temp = joypad.keys;
+
+            //printf("value: %02X\n", value);
             joypad.keys = value;
+            joypad.keys &= (0x30);
+            joypad.keys |= temp;
+
             break;
         case 0xFF0F: //IF
             
@@ -407,6 +429,10 @@ void WriteByte (unsigned short Address, unsigned char value)
             break;
         case 0xFF45:
             lcd.LYC = value;
+        case 0xFF46:
+            DoDMATransfer(value);
+            break;
+
         case 0xFF4A:
             lcd.WY = value;
             break;
@@ -421,11 +447,7 @@ void WriteByte (unsigned short Address, unsigned char value)
     else if (Address >= 0xFF80 && Address <= 0xFFFF) 
     {
 
-        if (Address == 0xFF46)
-        {
-            DoDMATransfer(value);
-
-        } else if (Address == 0xFFFF) 
+        if (Address == 0xFFFF) 
         {//IE
             
             interrupt.enable = value;
@@ -477,13 +499,19 @@ unsigned short ReadStack (void)
 
 void DoDMATransfer(unsigned char Addr)
 {
-
-   unsigned short address = Addr << 8 ; // source address is data * 100
-   for (int i = 0 ; i < 0xA0; i++)
-   {
     
+    cyclesRegained += 160; //160 machine cycles per DMA
+    unsigned short address = Addr << 8 ; // source address is 0xXX00;
+    for (int i = 0 ; i < 0xA0; i++)
+    {
+
     WriteByte(0xFE00+i, ReadByte(address+i));
 
-   }
+    }
+
+    // for(int i = 0; i < 0xA0; i++)
+    // {
+    //     printf("OAM[%d] = %d\n", i, ReadByte(0xFE00 + i));
+    // }
 
 }
