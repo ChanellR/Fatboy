@@ -2,8 +2,7 @@
 
 extern unsigned char DisplayPixels [256 * 256 * 3]; //row, pixel, color
 extern int ScanlineCounter;
-extern unsigned char SpriteExplorerDisplay [256 * 256 * 3];
-extern int triggered;
+extern int printLine;
 
 struct LCD {
     unsigned char control; //FF40
@@ -26,8 +25,6 @@ void LoadLineFromMap (void);
 void LoadSpriteLine (void);
 void LoadSpriteSheet (void);
 void LoadSpritesOnScreen (void);
-void LoadOAM (void);
-
 
 unsigned short GetBGMAPAddress (void);
 unsigned short GetDataAddress (void);

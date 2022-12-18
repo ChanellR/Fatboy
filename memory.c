@@ -39,11 +39,6 @@ unsigned char HRAM[(0xFFFE - 0xFF7F + 1)]; //FF80 - FFFE
 
 char Title[16];
 
-
-// joypad bits: Start Select B A / Down Up Left Right
-unsigned char JoypadState;
-
-
 void Reset(void)
 {
 
@@ -189,11 +184,11 @@ unsigned char ReadByte (unsigned short Address)
     {
         //printf("reading SRAMBANK: %i", currentSRAMBank);
 
-        if (RAMENABLE) {
+        // if (RAMENABLE) {
             output = SRAMBANKS[Address - 0xA000 + (currentSRAMBank * 0x2000)];
-        } else {
-            output = SRAMBANKS[Address- 0xA000]; // extra ram not enabled
-        }
+        // } else {
+        //     output = SRAMBANKS[Address- 0xA000]; // extra ram not enabled
+        // }
         
 
     } else if (Address >= 0xC000 && Address <= 0xDFFF) 
@@ -238,17 +233,9 @@ unsigned char ReadByte (unsigned short Address)
             output = timer.TAC;
             break;
         case 0xFF00:
-            
-            if( !(joypad.keys & 0x10)) {//p14
-
-                output =  ~(JoypadState & 0xF); 
-
-            } 
-
-            if( !(joypad.keys & 0x20))
-            {
-                output =  ~((JoypadState & 0xF0)>>4);
-            }
+            //printf("reading from keys\n");
+            //printf("keys: %02X\n", joypad.keys);
+            output = joypad.keys;
         
             break;
         case 0xFF0F: //IF
@@ -407,7 +394,13 @@ void WriteByte (unsigned short Address, unsigned char value)
             break;
         case 0xFF00:
 
+            //printf("writing to keys\n");
+            unsigned char temp = joypad.keys;
+
+            //printf("value: %02X\n", value);
             joypad.keys = value;
+            joypad.keys &= (0x30);
+            joypad.keys |= temp;
 
             break;
         case 0xFF0F: //IF
@@ -511,7 +504,14 @@ void DoDMATransfer(unsigned char Addr)
     unsigned short address = Addr << 8 ; // source address is 0xXX00;
     for (int i = 0 ; i < 0xA0; i++)
     {
-        WriteByte(0xFE00+i, ReadByte(address+i));
+
+    WriteByte(0xFE00+i, ReadByte(address+i));
+
     }
+
+    // for(int i = 0; i < 0xA0; i++)
+    // {
+    //     printf("OAM[%d] = %d\n", i, ReadByte(0xFE00 + i));
+    // }
 
 }
