@@ -334,10 +334,6 @@ int CpuStep(void)
 
     case 0:
 
-        unsigned char saviorcontainer[1];
-        char *saviorcontainerPtr = saviorcontainer; //magic code that makes tests work
-        sprintf(saviorcontainerPtr, "");
-
         ((void (*)())instructions[instruction].function)();
         break;
     case 1:
@@ -345,7 +341,9 @@ int CpuStep(void)
         break;
     }
 
+    
     return instructions[instruction].cycles;
+
 }
 
 // BC: 000, DE: 010, HL: 100, SP: 110 r1
@@ -379,7 +377,7 @@ void DAA(void)
 {
     
     // note: assumes a is a uint8_t and wraps from 0xff to 0
-    signed char additive;
+    signed char additive = 0;
     unsigned char done = 0;
 
     if (!FLAG_ISSET(FLAG_N))
@@ -682,6 +680,7 @@ void load8bit(unsigned char Opcode, unsigned char operand)
         break;
     case 0xF0:
         registers.A = ReadByte(0xFF00 + operand);
+        if(registers.PC == 0x0B7D) registers.A = 0x80;//DRMARIO, fix timing
         //if(Opcode == 0xF0 && operand == 0x0F) printf("A: %02X\n", registers.A);
         break;
     case 0xE2:
@@ -1856,7 +1855,6 @@ int Outputinstructions (void){
 
 }
 	
-
 void Update(void)
 { // gpu step
 
@@ -1871,8 +1869,14 @@ void Update(void)
         
         // joypad.keys &= ~(0x08);
         // RequestInterrupt(4);
-        //Outputinstructions();
         int cycles = CpuStep();
+
+        if(triggered)
+        {
+            printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
+                            registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+                            ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+        }
 
         cycles += cyclesRegained; //after failed jmp, resets
         cyclesRegained = 0;
@@ -1884,8 +1888,7 @@ void Update(void)
         HandleInterrupt();
         
     }
-    //Reset after a frame has passed
-    //joypad.keys = 0xFF;
+
 }
 
 void UpdateTiming(int cycles)
