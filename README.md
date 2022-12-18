@@ -22,3 +22,6 @@ spend time testing code rather than running it. That may or may not be true but 
 
 After having finally passed all of Blargg's cpu instruction tests, I realized how beneficial it would've been for me to put effort into finding out how to work them in the beginning and use them to track  my progress. When I finished my cpu implementation without testing and moved on to unsuccessfully implementing the PPU, it made me really discouraged because I felt as though I would never get it to work. Having this structure, something that can empirically track my progress has done wonders for me. 
 
+12/17/22
+
+Tetris and Dr. Mario is now completely playable. I need to do sound and fix timing issues along with work out some visual glitches but everything is alright, because at last you can play the game. 
