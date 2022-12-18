@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <windows.h>
@@ -9,6 +10,8 @@
 #include "Debugging.h"
 #include "gpu.h"
 #include "src\include\SDL2\SDL_syswm.h"
+#include "src\include\SDL2\SDL_ttf.h"
+
 
 #define WM_MESSAGE(x) (x.syswm.msg->msg.win)
 
@@ -16,13 +19,14 @@
 #define IDM_FILE_QUIT 2
 #define IDM_VIEW_SWAP 3
 #define IDM_VIEW_SPRITE 4
-
+#define IDM_VIEW_SPRITEEXPLORER 5
 
 char CurrentRom[40];
 
 int WindowWidth = 160 * 5;
 int WindowHeight = 144 * 5;
 int RomLoaded = 0;
+int triggered = 0;
 
 void Test (void) 
 {
@@ -74,8 +78,9 @@ void CreateMenuBar (HWND hwnd)
 
     AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SWAP, L"&ViewPort");
     CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_UNCHECKED);
-    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITE, L"&View Sprite Sheet");
+    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITE, L"&View Complete Sheet");
     CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_UNCHECKED);
+    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITEEXPLORER, L"&Open Sprite Explorer");
 
     AppendMenuW(hMenubar, MF_POPUP, (UINT_PTR) hMenuFile, L"&File");
     AppendMenuW(hMenubar, MF_POPUP, (UINT_PTR) hMenuView, L"&View");
@@ -139,11 +144,10 @@ int main(int argc, char** argv){
 
     int fps = 60;
     int DesiredDelta = 1000 / fps;
-    int Viewport = 1; //0: viewport, 1: map, 2: sprite sheet
+    int Viewport = 0; //0: viewport, 1: map, 2: sprite sheet
     int ViewSpriteSheet = 0;
     
     Reset();
-    //Test();
 
     if(SDL_Init(SDL_INIT_VIDEO) < 0){
         printf("Error: SDL failed to initialize\nSDL Error: '%s'\n", SDL_GetError());
@@ -152,6 +156,7 @@ int main(int argc, char** argv){
 
     SDL_Window *window = SDL_CreateWindow("Fatboy", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
                                             WindowWidth, WindowHeight, SDL_WINDOW_RESIZABLE);
+    
     
     if(!window){
         printf("Error: Failed to open window\nSDL Error: '%s'\n", SDL_GetError());
@@ -167,12 +172,18 @@ int main(int argc, char** argv){
     SDL_Texture * texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, 
                                             SDL_TEXTUREACCESS_STREAMING, 256, 256);
 
+    
     HWND WindowHandler = getSDLWinHandle(window);
-      
+    SDL_Window *SpriteExplorer;
+
+    HWND SpriteExplorerHandler;
+
+    SDL_Texture * SpriteExplorerTexture;
+    SDL_Renderer *SpriteExplorerrenderer;
+
+    CreateMenuBar(WindowHandler);  
     
     SDL_EventState(SDL_SYSWMEVENT, SDL_ENABLE);
-    CreateMenuBar(WindowHandler); 
-    
     
     bool running = true;
     while(running){
@@ -205,6 +216,7 @@ int main(int argc, char** argv){
                                 
                                     RomLoaded = 0;
                                     SendMessage(WindowHandler, WM_CLOSE, 0, 0);
+                                    SendMessage(SpriteExplorerHandler, WM_CLOSE, 0, 0);
                                     break; 
 
                                 case IDM_VIEW_SWAP:
@@ -236,13 +248,30 @@ int main(int argc, char** argv){
                                     } else {
 
                                         ViewSpriteSheet = 1;
-                                        Viewport = 1;
                                         CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_UNCHECKED); //zoom out for sprites
                                         CheckMenuItem(hMenuView, IDM_VIEW_SPRITE, MF_CHECKED);  
 
                                     }
-                            }       break;
+                                    break;
+                                
+                                case IDM_VIEW_SPRITEEXPLORER:
+                                    if(triggered == 1) break;
+                                    SpriteExplorer = SDL_CreateWindow("SpriteExplorer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
+                                            600, 600, SDL_WINDOW_RESIZABLE);
+                                    
+                                    SpriteExplorerHandler = getSDLWinHandle(SpriteExplorer);
+                                    SpriteExplorerrenderer = SDL_CreateRenderer(SpriteExplorer, -1, SDL_RENDERER_ACCELERATED);
 
+                                    SpriteExplorerTexture = SDL_CreateTexture(SpriteExplorerrenderer, 
+                                                        SDL_PIXELFORMAT_RGB24, 
+                                                        SDL_TEXTUREACCESS_STREAMING, 256, 256);
+                                    
+                                    triggered = 1;
+
+                                    break;
+                                    
+                                
+                            }       
 
                         break;
 
@@ -252,72 +281,146 @@ int main(int argc, char** argv){
                             {
                                 case VK_LEFT:
 
-                                    
-                                    // joypad.keys &= ~0x22;
-                                    // RequestInterrupt(4);
+                                    JoypadState |= 0x02;
+                                    RequestInterrupt(4);
                                     break;
 
                                 case VK_RIGHT:
 
-                                    
-                                    // joypad.keys &= ~0x21;
-                                    // RequestInterrupt(4);
+                                    JoypadState |= 0x01;
+                                    RequestInterrupt(4);
                                     break;
 
                                 case VK_UP:
 
                                     
-                                    // joypad.keys &= ~0x24;
-                                    // RequestInterrupt(4);
+                                    JoypadState |= 0x04;
+                                    RequestInterrupt(4);
                                     break;
 
                                 case VK_DOWN:
 
                                     
-                                    //joypad.keys &= ~0x28;
-                                    //RequestInterrupt(4);
+                                    JoypadState |= 0x08;
+                                    RequestInterrupt(4);
                                     break;
                                 
                                 case VK_RETURN:
                                     //start
                                     
-                                    // joypad.keys &= ~0x18;
-                                    // RequestInterrupt(4);
+                                    JoypadState |= 0x80;
+                                    RequestInterrupt(4);
                                     break;
 
                                 case VK_SHIFT:
                                     //select
                                     
-                                    // joypad.keys &= ~0x14;
-                                    // RequestInterrupt(4);
+                                    JoypadState |= 0x40;
+                                    RequestInterrupt(4);
                                     break;
 
                                 case 0x5A: //Z (A)
 
                                     
-                                    // joypad.keys &= ~0x11;
-                                    // RequestInterrupt(4);
+                                    JoypadState |= 0x10;
+                                    RequestInterrupt(4);
                                     break;
 
                                 case 0x58: //X (B)
 
                                     
-                                    // joypad.keys &= ~0x12;
-                                    // RequestInterrupt(4);
+                                    JoypadState |= 0x20;
+                                    RequestInterrupt(4);
                                     break;
                             }
+                        
+                        break;
+
+                        case WM_KEYUP:
+                            
+                            switch (LOWORD(WM_MESSAGE(event).wParam))
+                            {
+                                case VK_LEFT:
+
+                                    JoypadState &= ~(0x02);
+
+                                    break;
+
+                                case VK_RIGHT:
+
+                                    JoypadState &= ~(0x01);
+
+                                    break;
+
+                                case VK_UP:
+
+                                    JoypadState &= ~(0x04);
+
+                                    break;
+
+                                case VK_DOWN:
+
+                                    JoypadState &= ~(0x08);
+
+                                    break;
+                                
+                                case VK_RETURN:
+                                    //start
+                                    
+                                    JoypadState &= ~(0x80);
+
+                                    break;
+
+                                case VK_SHIFT:
+                                    //select
+                                    
+                                    JoypadState &= ~(0x40);
+
+                                    break;
+
+                                case 0x5A: //Z (A)
+
+                                    JoypadState &= ~(0x10);
+
+                                    break;
+
+                                case 0x58: //X (B)
+
+                                    
+                                    JoypadState &= ~(0x20);
+
+                                    break;
+                            }
+                            
 
                         break;
                     }
 
                     break;
 
-                case SDL_QUIT:
+                case SDL_WINDOWEVENT:
+
+                    if(!(event.window.event == SDL_WINDOWEVENT_CLOSE)) break;
+                    if(SDL_GetWindowID(SpriteExplorer) == event.window.windowID)
+                    {
+                        SDL_DestroyWindow(SpriteExplorer);
+                        SDL_DestroyTexture(SpriteExplorerTexture);
+                        SDL_DestroyRenderer(SpriteExplorerrenderer);
+                        triggered = 0;
+                        break;
+                    }
+                
+                case SDL_QUIT: //won't work with multiple windows
+                    
+                    SDL_DestroyRenderer(renderer);
 
                     SDL_DestroyTexture(texture);
-                    SDL_DestroyRenderer(renderer);
                     SDL_DestroyWindow(window);
                     
+                    SDL_DestroyWindow(SpriteExplorer);
+                    SDL_DestroyTexture(SpriteExplorerTexture);
+                    SDL_DestroyRenderer(SpriteExplorerrenderer);
+
                     running = false;
                     break;
 
@@ -328,17 +431,34 @@ int main(int argc, char** argv){
         }
 
         if(RomLoaded){
-            
-            //LoadTilesFromMap();
-            //printf("joypad: %02X\n", joypad.keys);
-            Update(); 
-            if(ViewSpriteSheet && RomLoaded) {memset(DisplayPixels, 0, 256 * 256 * 3); LoadSpriteSheet();}
-            
-            
-            
-            //LoadTilesFromMap();
-            LoadSpritesOnScreen();
+
+            Update();     
             DrawViewportWithScrolling(renderer, texture, Viewport);
+
+            if(SpriteExplorer && triggered){
+
+                HWND SpriteExplorerHandler = getSDLWinHandle(SpriteExplorer);
+
+                SDL_Rect SpriteExplorerrect = { //current display at SCX: 0 and SCY: 0.
+                0, 0, 8 * 21, 8 * 21};
+
+                memset(SpriteExplorerDisplay, 0xE8, 256 * 256 * 3);
+                if(ViewSpriteSheet) LoadSpriteSheet(); else LoadOAM();
+
+                SDL_RenderClear(SpriteExplorerrenderer);
+                
+                SDL_UpdateTexture(SpriteExplorerTexture, NULL, SpriteExplorerDisplay, 256 *3);
+                
+                SDL_RenderCopy(SpriteExplorerrenderer, 
+                                SpriteExplorerTexture, 
+                                (ViewSpriteSheet) ? NULL : &SpriteExplorerrect, 
+                                NULL); //just display entire field for now
+
+                SDL_RenderPresent(SpriteExplorerrenderer);
+
+                
+
+            }
 
         }
 
