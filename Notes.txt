@@ -1,6 +1,6 @@
 
 gcc -Isrc/Include -Lsrc/lib -o Fatboy main.c cpu.c gpu.c memory.c -lmingw32 -lSDL2main -lSDL2 -lcomdlg32 -lgdi32
-
+PC: 00:4047 (C9 3E 01 EA)
 Notes:
     pass the loop by fixing LY  
     Read codeslinger to really figure out where it reads from 
@@ -91,3 +91,9 @@ A: 01 F: 20 B: 00 C: 00 D: 00 E: 09 H: 99 L: 71 SP: CFF7 PC: 00:0B7F (20 FA F1 C
 A: 01 F: 20 B: 00 C: 00 D: 00 E: 09 H: 99 L: 71 SP: CFF7 PC: 00:0B7B (F0 41 E6 03)
 A: 81 F: 20 B: 00 C: 00 D: 00 E: 09 H: 99 L: 71 SP: CFF7 PC: 00:0B7D (E6 03 20 FA)
 A: 01 F: 20 B: 00 C: 00 D: 00 E: 09 H: 99 L: 71 SP: CFF7 PC: 00:0B7F (20 FA F1 C9)
+
+
+
+SHIFT WINDOW BY SCY AS WELL SO IT FITS ON SCREEN
+
+zelda crashes on 1F to the left and 1B to the right

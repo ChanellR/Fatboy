@@ -19,7 +19,7 @@
 unsigned char RAMMODE = 0;
 
 // unsigned char ROMBANK0[0x4000];// 0000-3FFF
-unsigned char ROMBANKS[64 * 0x4000]; //4000 - 7FFF
+unsigned char ROMBANKS[129 * 0x4000]; //4000 - 7FFF
 
 unsigned char RomBankLo = 0x01;
 unsigned char RomBankHi = 0x0;
@@ -36,12 +36,30 @@ unsigned char WRAM[0x2000]; //C000-Dfff
 unsigned char OAM[0xA0]; //FE00 - FE9F
 unsigned char IO[0x80]; //FF00 - FF7F
 unsigned char HRAM[(0xFFFE - 0xFF7F + 1)]; //FF80 - FFFE
+unsigned long romswitches = 0;
 
+int MBCmode;
 char Title[16];
 
 
 // joypad bits: Start Select B A / Down Up Left Right
 unsigned char JoypadState;
+
+int DetectMBC (void) 
+{
+    // MBC1: max 2MB ROM (125 banks) and/or up to 32KB RAM
+    // MBC2: max 256KB ROM (16 banks) and 512x4 bits RAM
+    // MBC3: max 2MB ROM (128 banks) and/or 32KB RAM (4 banks) and Timer
+    // MBC5: max 8MB ROM (512 banks) and/or 128KB RAM (16 banks)
+    // HuC1: Similar to MBC1 with an Infrared Controller
+
+    //Pokemon, 64 banks 1MB, 4 bank RAM, 32KB
+    printf("MBC: %02X, ROM: %02X", ReadByte(0x0147), ReadByte(0x0148));
+    int CartType = (ReadByte(0x0147));
+    if((CartType >= 0x0F && CartType <= 0x19)){
+        MBCmode = 3;
+    } else {MBCmode = 1;}
+}
 
 
 void Reset(void)
@@ -153,7 +171,7 @@ void LoadRom (char * Filename)
     f = fopen(Filename, "r");
     //Reads all x8000 bytes of Rom data
     // fread(ROMBANK0, 0x4000, 1, f);
-    fread(ROMBANKS, 0x4000, 64, f);
+    fread(ROMBANKS, 0x4000, 129, f);
     printf("Completed Loading Rom: %s \n", Filename);
     LoadRomTitle();
     fclose(f);
@@ -164,10 +182,10 @@ void LoadRom (char * Filename)
 unsigned char ReadByte (unsigned short Address) 
 {
 
-    currentRomBank = ((RomBankHi <<5) | (RomBankLo));
-    if (currentRomBank == 0) {currentRomBank++;}
+    currentRomBank = (MBCmode == 1) ? ((RomBankHi <<5) | (RomBankLo)) : currentRomBank;
 
     unsigned char output;
+    //if RAMMODE 1, only rom banks 00-1F can be used but all 4 can be used for mBC1
 
     
     if (Address <= 0x3FFF)
@@ -177,8 +195,14 @@ unsigned char ReadByte (unsigned short Address)
 
     } else if (Address >= 0x4000 && Address <= 0x7FFF) 
     {
-        //if(currentRomBank > 1)printf("reading ROMMBANK: %i\n", currentRomBank);
-        output = ROMBANKS[Address - 0x4000 + ((currentRomBank) * 0x4000)]; //0000 is rombank 1
+        
+        
+        if(RAMMODE == 1 && MBCmode == 1) currentRomBank & 0x1F;
+        if (currentRomBank == 0) currentRomBank = 1;
+        int Romoffset = currentRomBank;
+
+        //printf("reading ROMMBANK: %x\n", Romoffset);
+        output = ROMBANKS[Address - 0x4000 + ((Romoffset) * 0x4000)]; //0000 is rombank 1
          
     } else if (Address >= 0x8000 && Address <= 0x9FFF) 
     {
@@ -188,12 +212,11 @@ unsigned char ReadByte (unsigned short Address)
     } else if (Address >= 0xA000 && Address <= 0xBFFF) 
     {
         //printf("reading SRAMBANK: %i", currentSRAMBank);
+        int SRAMoffset = (RAMMODE == 1) ?  (currentSRAMBank) : 0;
 
         if (RAMENABLE) {
-            output = SRAMBANKS[Address - 0xA000 + (currentSRAMBank * 0x2000)];
-        } else {
-            output = SRAMBANKS[Address- 0xA000]; // extra ram not enabled
-        }
+            output = SRAMBANKS[Address - 0xA000 + (SRAMoffset * 0x2000)];
+        } 
         
 
     } else if (Address >= 0xC000 && Address <= 0xDFFF) 
@@ -222,19 +245,15 @@ unsigned char ReadByte (unsigned short Address)
 
         switch(Address){ //IO
         case 0xFF04:
-
             output = timer.DIV;
             break;
         case 0xFF05:
-
             output = timer.TIMA;
             break;
         case 0x0FF06:
-
             output = timer.TMA;
             break;
         case 0xFF07: //tima stacking
-
             output = timer.TAC;
             break;
         case 0xFF00:
@@ -252,16 +271,13 @@ unsigned char ReadByte (unsigned short Address)
         
             break;
         case 0xFF0F: //IF
-            
             output = interrupt.flag;
             // printf("Reading from IF, IF: %02X \n", interrupt.flag);
             break;
         case 0xFF40:
-
             output = lcd.control;
             break;
         case 0xFF41:
-
             output = lcd.status;
             break;
         case 0xFF42:
@@ -305,34 +321,53 @@ unsigned char ReadByte (unsigned short Address)
 void WriteByte (unsigned short Address, unsigned char value) 
 {
 
-    currentRomBank = ((RomBankHi <<5) | (RomBankLo));
-    if (currentRomBank == 0) {currentRomBank++;}
+    //currentRomBank = (MBCmode != 3) ? ((RomBankHi <<5) | (RomBankLo)) : currentRomBank;
 
 
     if (Address <= 0x1FFF)
     { //RAM ENABLE
 
         value &= 0x0F;
-        if (value == 0x0A) {RAMENABLE = 1;} else {RAMENABLE = 0;}
+        if (value == 0x0A) 
+        {
+           // printf("ram enabled");
+            RAMENABLE = 1;
+
+        } else 
+        {
+           //printf("ram disabled");
+            RAMENABLE = 0;
+            
+        }
 
     } else if (Address >= 0x2000 && Address <= 0x3FFF) 
     {
         
-        RomBankLo = (value & 0x1F);
+        //MBC3
+        
+        RomBankLo = (value > 0) ? (value & 0x1F) : 1;
+        romswitches++;
+        if(MBCmode == 3) currentRomBank = value & 0x7F; printf("rombank: %02X switches: %lu\n", currentRomBank, romswitches);
+        
+
+
+        //see if $21 bug is present
         //printf("RomBankLo: %02X from value: %02X\n", RomBankLo, value);
          
     } else if (Address >= 0x4000 && Address <= 0x5FFF) 
     {
 
         value &= 0x03;
-
+        
         if(RAMMODE) {
 
+            //printf("changing sram value");
             currentSRAMBank = value;
 
         } else {
-
+            
             RomBankHi = value;
+            //printf("RomBankHi: %X, value: %02X\n", RomBankHi, value);
             //printf("RomBankHi: %02X from value: %02X\n", RomBankHi, value);
         }
 
@@ -340,9 +375,13 @@ void WriteByte (unsigned short Address, unsigned char value)
     {
 
         if(value == 0x00) {
+            //printf("ROM MODE");
             RAMMODE = 0;
-        } else {
-            RAMMODE = 1;
+        } else if(value == 0x01)
+        {
+            //printf("ram mode");
+            RAMMODE = 1; //ram mode centered 
+            // 16Mb ROM/8KB RAM and 4Mb ROM/32KB on MBC1
         }
 
     } else if (Address >= 0x8000 && Address <= 0x9FFF) 
@@ -352,8 +391,8 @@ void WriteByte (unsigned short Address, unsigned char value)
 
     } else if (Address >= 0xA000 && Address <= 0xBFFF) 
     {
-        
-        if (RAMENABLE) {SRAMBANKS[Address - 0xA000 + (currentSRAMBank * 0x2000)] = value;}
+        int SRAMoffset = (RAMMODE) ? (currentSRAMBank) : 0;
+        if (RAMENABLE) {SRAMBANKS[Address - 0xA000 + (SRAMoffset * 0x2000)] = value;}
 
     } else if (Address >= 0xC000 && Address <= 0xDFFF) 
     {
@@ -385,61 +424,46 @@ void WriteByte (unsigned short Address, unsigned char value)
         //     IO[01] = value;
         //     break;
         case 0xFF04:
-
             timer.DIV = 0;
             break;
         case 0xFF05:
-
             timer.TIMA = value;
             break;
         case 0x0FF06:
-
             timer.TMA = value;
             break;
         case 0xFF07: //tima stacking
-
             int old_freq = timer.TAC & 0x3; //only update if new
             timer.TAC = value;
             int new_freq = timer.TAC & 0x3;
-
             if (old_freq != new_freq) {timercounter = CLOCKSPEED / GetFrequency();}
-            
             break;
         case 0xFF00:
-
             joypad.keys = value;
-
             break;
         case 0xFF0F: //IF
-            
-            interrupt.flag = value;
-            // printf("writing to IF, IF: %02X from value: %02X\n", interrupt.flag, value);
+            interrupt.flag = 0;//see if working
             break;
-        
         case 0xFF40:
-
             lcd.control = value;
+            break;
         case 0xFF41:
-
-            lcd.status = 0x80;
-
+            lcd.status = value;
+            break;
         case 0xFF42:
-
             lcd.SCY = value;
-
             break;
         case 0xFF43:
             lcd.SCX = value;
             break;
         case 0xFF44:
-            lcd.LY = 0; //reset cirumcumstantial change
+            lcd.LY = value; //reset cirumcumstantial change
             break;
         case 0xFF45:
             lcd.LYC = value;
         case 0xFF46:
             DoDMATransfer(value);
             break;
-
         case 0xFF4A:
             lcd.WY = value;
             break;

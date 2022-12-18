@@ -308,6 +308,15 @@ const struct Instruction instructions[256] = {
 
 };
 
+
+int Outputinstructions (void){
+
+    printf("PC: 00:%04X (%02X %02X %02X %02X)\n", 
+                registers.PC, ReadByte(registers.PC), ReadByte(registers.PC + 1), 
+                ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+
+}
+
 int CpuStep(void)
 {
 
@@ -358,18 +367,20 @@ void nop(void) {}
 void STOP(void)
 {
 
+    if(!interrupt.FJoypad) registers.PC--;
+    // printf("stopped");
+    // Outputinstructions();
     // Reset, start at 0000h
     // input, start after instruction
 
 }
-
+ 
 void HALT(void)
 {
 
-    if (!interrupt.flag){ //if no interrupts, move backwards
-        registers.PC--;
-    }
-    // Halted
+    if ((interrupt.flag & interrupt.enable)) {registers.PC--; return;}
+    // printf("halted");
+    // Outputinstructions();
 
 }
 
@@ -1767,7 +1778,8 @@ unsigned char BIT(unsigned char bit, unsigned char byte, unsigned char OP)
 
 void RequestInterrupt(int val)
 {
-    // printf("Request with Value: %d\n", val);
+
+    //printf("Request with Value: %d\n", val);
     switch (val)
     {
     case 0:
@@ -1786,6 +1798,9 @@ void RequestInterrupt(int val)
         interrupt.FJoypad = 1;
         break;
     }
+
+    // printf("FBlank: %d", interrupt.FVBlank);
+    // printf("IF: %02X", interrupt.flag);
     // printf("Request Interrupt assigned, IF: %02X val: %02X\n", interrupt.flag, val);
 
 }
@@ -1793,67 +1808,30 @@ void RequestInterrupt(int val)
 void HandleInterrupt(void)
 {
 
-    if(interrupt.master == 0) {
-        return;
-    }
-
-    // printf("Handling Interrupt");
     unsigned short InterruptAddress[5] = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060};
 
-    unsigned char priority;
-    unsigned char currentFlag = 0;
+    if(interrupt.master == 1){
 
-    if (interrupt.FVBlank)
-    {
-        currentFlag = 0x01;
-        priority = 0;
-    }
-    else if (interrupt.FLCD)
-    {
-        currentFlag = 0x02;
-        priority = 1;
-    }
-    else if (interrupt.FTimer)
-    {
-        currentFlag = 0x04;
-        priority = 2;
-    }
-    else if (interrupt.FSerial)
-    {
-        currentFlag = 0x08;
-        priority = 3;
-    }
-    else if(interrupt.FJoypad)
-    {
-        currentFlag = 0x10;
-        priority = 4;
+        if(interrupt.flag){
+
+            for(int i = 0; i < 5; i++){
+
+                if((interrupt.flag & (1<<i)) & interrupt.enable){
+
+                    interrupt.flag ^= (1<<i);
+                    CALL(0x00, InterruptAddress[i]);
+                    interrupt.master = 0;
+                }
+
+            }
+        }
+
     }
 
-    if (interrupt.master && (currentFlag & interrupt.enable))
-    {
-         //reset joypad
-
-        interrupt.master = 0;
-        interrupt.flag &= ~(currentFlag);
-
-        CALL(0x00, InterruptAddress[priority]);
-        
-
-    } 
     // interrupt call
 }
 
-int Outputinstructions (void){
 
-    char debugMessage[8000];
-    char *debugMessageP = debugMessage;
-    debugMessageP += sprintf(debugMessageP, "A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
-                            registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
-                            ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
-
-    printf("%s", debugMessage);
-
-}
 	
 void Update(void)
 { // gpu step
@@ -1870,13 +1848,15 @@ void Update(void)
         // joypad.keys &= ~(0x08);
         // RequestInterrupt(4);
         int cycles = CpuStep();
-
-        if(triggered)
-        {
-            printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
-                            registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
-                            ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
-        }
+        
+        // if(triggered)
+        // {
+        //     if(registers.PC > 0x4000) Outputinstructions();
+        //     // printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
+        //     //                 registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+        //     //                 ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+        //     // printf("IF: %02X, IE: %02X, IME: %d\n", interrupt.flag, interrupt.enable, interrupt.master);
+        // }
 
         cycles += cyclesRegained; //after failed jmp, resets
         cyclesRegained = 0;
@@ -1885,7 +1865,9 @@ void Update(void)
 
         UpdateGraphics(cycles);
         UpdateTiming(cycles);
+
         HandleInterrupt();
+        
         
     }
 

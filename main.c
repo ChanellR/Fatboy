@@ -76,10 +76,10 @@ void CreateMenuBar (HWND hwnd)
     AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_QUIT, L"&Quit");
 
     AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SWAP, L"&ViewPort");
+    CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_CHECKED);
+    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITE, L"&View Tile Map");
     CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_UNCHECKED);
-    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITE, L"&View Complete Sheet");
-    CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_UNCHECKED);
-    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITEEXPLORER, L"&Open Sprite Explorer");
+    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITEEXPLORER, L"&Open Explorer");
 
     AppendMenuW(hMenubar, MF_POPUP, (UINT_PTR) hMenuFile, L"&File");
     AppendMenuW(hMenubar, MF_POPUP, (UINT_PTR) hMenuView, L"&View");
@@ -109,6 +109,7 @@ void OpenDialog(HWND hwnd) {
   {
     Reset();  
     LoadRom(ofn.lpstrFile);
+    DetectMBC();
     //LoadTilesFromMap();
 
   }
@@ -255,11 +256,11 @@ int main(int argc, char** argv){
                                 
                                 case IDM_VIEW_SPRITEEXPLORER:
                                     if(triggered == 1) break;
-                                    SpriteExplorer = SDL_CreateWindow("SpriteExplorer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
+                                    SpriteExplorer = SDL_CreateWindow("Explorer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
                                             600, 600, SDL_WINDOW_RESIZABLE);
                                     
                                     SpriteExplorerHandler = getSDLWinHandle(SpriteExplorer);
-                                    SpriteExplorerrenderer = SDL_CreateRenderer(SpriteExplorer, -1, SDL_RENDERER_ACCELERATED);
+                                    SpriteExplorerrenderer = SDL_CreateRenderer(SpriteExplorer, -1, 0);
 
                                     SpriteExplorerTexture = SDL_CreateTexture(SpriteExplorerrenderer, 
                                                         SDL_PIXELFORMAT_RGB24, 
@@ -420,6 +421,8 @@ int main(int argc, char** argv){
                     SDL_DestroyTexture(SpriteExplorerTexture);
                     SDL_DestroyRenderer(SpriteExplorerrenderer);
 
+                        
+
                     running = false;
                     break;
 
@@ -432,6 +435,7 @@ int main(int argc, char** argv){
         if(RomLoaded){
 
             Update();     
+            //LoadTilesFromMap();
             DrawViewportWithScrolling(renderer, texture, Viewport);
 
             if(SpriteExplorer && triggered){
@@ -442,7 +446,7 @@ int main(int argc, char** argv){
                 0, 0, 8 * 21, 8 * 21};
 
                 memset(SpriteExplorerDisplay, 0xE8, 256 * 256 * 3);
-                if(ViewSpriteSheet) LoadSpriteSheet(); else LoadOAM();
+                if(ViewSpriteSheet) LoadTilesFromMap(); else LoadOAM();
 
                 SDL_RenderClear(SpriteExplorerrenderer);
                 
@@ -462,7 +466,7 @@ int main(int argc, char** argv){
         }
 
         int delta = SDL_GetTicks() - startLoop;
-        if(delta < DesiredDelta) SDL_Delay(DesiredDelta - delta);
+        //if(delta < DesiredDelta) SDL_Delay(DesiredDelta - delta);
 
 
     }
