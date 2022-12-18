@@ -1,5 +1,4 @@
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <windows.h>
@@ -10,7 +9,7 @@
 #include "Debugging.h"
 #include "gpu.h"
 #include "src\include\SDL2\SDL_syswm.h"
-#include "src\include\SDL2\SDL_ttf.h"
+
 
 
 #define WM_MESSAGE(x) (x.syswm.msg->msg.win)
