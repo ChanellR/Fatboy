@@ -20,6 +20,7 @@ struct registers registers;
 struct joypad joypad;
 //number of Updates performed. 
 int cyclesRegained; //regained after failed jmp
+unsigned long CyclesPast = 0;
 
 int timercounter = CLOCKSPEED / 1024; // set to mode 0
 int dividercounter = 256;
@@ -327,7 +328,7 @@ int CpuStep(void)
 
     case -4:
         ((void (*)(unsigned char, signed char))instructions[instruction].function)(instruction, ReadByte(registers.PC++));
-        //signed char
+        //signed char   
         break;
     case -3:
         registers.PC += 2; //need to not break the passage 
@@ -379,6 +380,7 @@ void HALT(void)
 {
 
     if ((interrupt.flag & interrupt.enable)) {registers.PC--; return;}
+    //write halt bug
     // printf("halted");
     // Outputinstructions();
 
@@ -1830,7 +1832,7 @@ void HandleInterrupt(void)
 
     // interrupt call
 }
-	
+
 void Update(void)
 { // gpu step
 
@@ -1842,17 +1844,15 @@ void Update(void)
 
     while (currentcycles < MAXCYCLES)
     {
-        
+        //printf("TIMA: %02X Cycles: %lu\n", timer.TIMA, CyclesPast);
         int cycles = CpuStep();
         
         // if(triggered)
         // {
-        //     if(currentRomBank == 0x1F) {
-        //         printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
-        //                     registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
-        //                     ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
-        //         printf("IF: %02X, IE: %02X, IME: %d\n", interrupt.flag, interrupt.enable, interrupt.master);
-        //     }
+        //     printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
+        //                 registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+        //                 ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+        //     printf("IF: %02X, IE: %02X, IME: %d\n", interrupt.flag, interrupt.enable, interrupt.master);
         // }
 
         cycles += cyclesRegained; //after failed jmp, resets
@@ -1862,7 +1862,8 @@ void Update(void)
 
         UpdateGraphics(cycles);
         UpdateTiming(cycles);
-
+        // printf("IF: %02X, IE: %02X, IME: %d, TIMA: %02X, TMA: %02X, TAC: %02X\n", interrupt.flag, interrupt.enable, interrupt.master,
+        // timer.TIMA, timer.TMA, timer.TAC);
         HandleInterrupt();
         
         
@@ -1918,9 +1919,16 @@ void UpdateDivider(int cycles)
         int overflow = (-1 * dividercounter);
         dividercounter = 256; //64 M cycles per tick
         dividercounter -= overflow;
+        if(timer.DIV == 255){
 
-        timer.DIV++;
-    }
+            timer.DIV++;
+            //timer.TIMA = timer.TMA;
+            
+        } else {
+            timer.DIV++;
+        }
+        
+    } 
 
 }
 

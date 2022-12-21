@@ -11,9 +11,12 @@
  //every dot and their hue
 
 struct LCD lcd;
-int ScanlineCounter = 456; //456 cycles per scan line, there is a 146 vblank buffer
-unsigned char DisplayPixels [256 * 256 * 3];
+int ScanlineCounter; //456 cycles per scan line, there is a 146 vblank buffer
+unsigned char DisplayPixels [160 * 144 * 3];
 unsigned char SpriteExplorerDisplay [256 * 256 * 3];
+unsigned char WindowXFlag = 0;
+unsigned char WindowYFlag = 0;
+int WindowLineCounter = 0;
 
 unsigned char* GetPixelColor (unsigned char bit1, unsigned char bit2, int pallette);
 
@@ -63,18 +66,14 @@ void UpdateGraphics (int cycles) {
             
             RequestInterrupt(0);
             
-
         } else if (lcd.LY > 153) {
             
-            lcd.LY = 0; //reset if outside range
+            lcd.LY = 0;
             DrawScanline();
-
 
         } else if (lcd.LY < 144) {
             
-            
             DrawScanline(); //this will add a line to the render buffer
-
 
         }
 
@@ -111,9 +110,8 @@ void SetLCDstatus (void) {
         lcd.status |= 0x01;
         ReqInt = (lcd.status & 0x10); // bit 4
 
-    } 
-    
-    if (ScanlineCounter){ //to buffer in the beginning 
+    } else if (ScanlineCounter)    
+    { //to buffer in the beginning 
 
         int mode2bounds = 456-80 ;
         int mode3bounds = mode2bounds - 172 ;
@@ -140,24 +138,22 @@ void SetLCDstatus (void) {
 
         }
 
+    }
 
-        if (ReqInt && (currentMode != mode)) {
-            RequestInterrupt(1); //stat interrupt
-        }
+    if (ReqInt && (currentMode != mode)) {
+        RequestInterrupt(1); //stat interrupt
+    }
 
-        if (lcd.LY == lcd.LYC) {
-            
-            lcd.status |= 0x04;
+    if (lcd.LY == lcd.LYC) {
+        
+        lcd.status |= 0x04;
 
-            if(lcd.status & 0x40) { //bit 6
-                RequestInterrupt(1);
-            }
+        if(lcd.status & 0x40) { //bit 6
+            RequestInterrupt(1);
+    }
 
-        } else {
-            lcd.status &= ~(0x04); //everything but second bit
-        }
-
-
+    } else {
+        lcd.status &= ~(0x04); //everything but second bit
     }
 
 }
@@ -197,7 +193,7 @@ void LoadSpritesOnScreen (void) {
 
         SpriteXpos = ReadByte(0xFE00 + SpritetoLoad * 4 + 1);
         
-        int SpritePixelOffset = (SpriteYPos > 15) ? (SpriteXpos - 8) * 3 + (SpriteYPos - 16) * 256 * 3 : (SpriteXpos - 8) * 3;
+        int SpritePixelOffset = (SpriteYPos > 15) ? (SpriteXpos - 8) * 3 + (SpriteYPos - 16) * 160 * 3 : (SpriteXpos - 8) * 3;
 
         unsigned short SpriteDataAddress = DataAddress;
         
@@ -218,7 +214,7 @@ void LoadSpritesOnScreen (void) {
             unsigned char byte1;
             unsigned char byte2;
 
-            int lineoffset = (lineofSprite) * (256) * 3;// should start printing only @lcd.LY independent of positon of lcd.SCY
+            int lineoffset = (lineofSprite) * (160) * 3;// should start printing only @lcd.LY independent of positon of lcd.SCY
 
             if(SpriteVMirror){
                     
@@ -579,78 +575,79 @@ void LoadTilesFromMap (void)
 
 }
 
+
+
 void LoadLineFromMap (void)
 {
-    //scrolls automatically to fit everything within 160 * 144 in display
-    //saves from having to dynamically asdjust the src and dst rect which would case distortion
-    unsigned short DataAddress = (lcd.control) ? GetDataAddress() : 0x8000;
-    unsigned short TileIDAddress = (lcd.control) ? GetBGMAPAddress() : 0x9800;
-
-    int firstTileInLine = ((((unsigned char)lcd.LY + lcd.SCY) / 8) * 32);    
-    int firstTiletoWrite = (((unsigned char)(lcd.LY + lcd.SCY) / 8) * 32) + lcd.SCX/8;
-    int tile = 0;
-
-    //printf("first to write: %d, lastinline: %d \n", firstTiletoWrite, lastTileInLine);
-
-    unsigned char Pixel = lcd.SCX;
-
-    for (int tilecounter = firstTiletoWrite; tilecounter < firstTiletoWrite + 20; tilecounter++) //dont do 32 tiles after
+    
+    if(lcd.LY == 0) 
     {
-        tile = firstTileInLine + (Pixel/8);
-
-        int tileOffset = ((tilecounter - firstTiletoWrite) % 32) * 8 * 3; //row then coloumn
-
-        int TileID;
-        int offset;
-
-        int Windowtileshift = 0;
-        int WindowStartingTile = (lcd.WY/8) * 32 + (lcd.WX - 7) / 8;
-        
-        if(UsingWindow() && (lcd.LY >= lcd.WY))// && (tile >= WindowStartingTile))
-        {
-            
-            TileIDAddress = GetWINMAPAddress();
-            Windowtileshift = ((lcd.WY - lcd.SCY)/8) * 32; //number of lines because WY starts the window at the beginning
-
-            TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(TileIDAddress + (tilecounter - firstTiletoWrite) + ((lcd.LY-lcd.WY)/8)*32 ) : (signed char) ReadByte(TileIDAddress + (tilecounter - firstTiletoWrite) + ((lcd.LY-lcd.WY)/8)*32);
-            offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 128) * 16);
-
-        } else {
-            
-            TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(TileIDAddress + tile - Windowtileshift) : (signed char) ReadByte(TileIDAddress + tile - Windowtileshift);
-            offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 128) * 16);
-        
-        }
-
-        Pixel += 8;
-        unsigned short TileDataAddress = DataAddress;
-        TileDataAddress += (offset); 
-
-        int line = (lcd.LY + lcd.SCY) % 8;
-        int lineoffset = (lcd.LY) * (256) * 3;// should start printing only @lcd.LY independent of positon of lcd.SCY
-
-        unsigned char byte1 = ReadByte( TileDataAddress + line * 2); //off set by their position in the tile
-        unsigned char byte2 = ReadByte( TileDataAddress + line * 2 + 1 );     
-
-        for(int pixel = 0; pixel < 8; pixel++)
-        {
-            
-            int PixelOffset = pixel * 3;
-
-            unsigned char bit1 = (byte1 & (0x80 >> pixel));
-            unsigned char bit2 = (byte2 & (0x80 >> pixel));
-
-            unsigned char *colors;
-            colors = GetPixelColor(bit1, bit2, 2);
-            if(!(lcd.control & 0x01)) colors = GetPixelColor(0, 0, 2);
-
-            DisplayPixels[tileOffset + lineoffset + PixelOffset] = colors[0];
-            DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = colors[1];
-            DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = colors[2];
-            
-        }
-        
+        WindowXFlag = 0; //reset window criteria every frame
+        WindowYFlag = 0;
+        WindowLineCounter = 0;
     }
+
+    unsigned short DataAddress = GetDataAddress();
+    unsigned short MapAddress;
+
+    int TileNum;
+    int TileID;
+    int offset;
+
+    unsigned char byte1;
+    unsigned char byte2;
+    unsigned char bit1;
+    unsigned char bit2;
+
+    unsigned char Ypos = lcd.LY + lcd.SCY;
+
+    if(lcd.WX < 7) WindowXFlag = 1;
+    if(lcd.LY == lcd.WY) WindowYFlag = 1; 
+
+    for (int Pixelcounter = 0; Pixelcounter < 160; Pixelcounter++)
+    {
+        unsigned char Xpos = lcd.SCX + Pixelcounter;
+        
+        int currentBGTile = ((Ypos)/8)*32 + ((Xpos)/8); //The tile to be writing in this position.
+        if(Pixelcounter == lcd.WX - 7) WindowXFlag = 1;
+        
+        if((Xpos) % 8 == 0 || Pixelcounter == 0)
+        {
+            if(UsingWindow() && WindowYFlag && WindowXFlag) 
+            {
+                MapAddress = GetWINMAPAddress();
+                TileNum = (WindowLineCounter/8) * 32 + (Pixelcounter/8);
+                TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(MapAddress + TileNum) : (signed char) ReadByte(MapAddress + TileNum);
+                offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 128) * 16); 
+                
+                byte1 = ReadByte(DataAddress + offset + (WindowLineCounter % 8) * 2);
+                byte2 = ReadByte(DataAddress + offset + (WindowLineCounter % 8) * 2 + 1);
+            } 
+            else 
+            {
+                MapAddress = GetBGMAPAddress();
+                TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(MapAddress + currentBGTile) : (signed char) ReadByte(MapAddress + currentBGTile);
+                offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 128) * 16); 
+
+                byte1 = ReadByte(DataAddress + offset + (Ypos % 8) * 2);
+                byte2 = ReadByte(DataAddress + offset + (Ypos % 8) * 2 + 1);
+            }
+        }
+
+        unsigned char bit1 = (byte1 & (0x80 >> (Xpos % 8)));
+        unsigned char bit2 = (byte2 & (0x80 >> (Xpos % 8)));
+
+        unsigned char *colors;
+        colors = GetPixelColor(bit1, bit2, 2);
+        if(!(lcd.control & 0x01)) colors = GetPixelColor(0, 0, 2);
+
+        DisplayPixels[lcd.LY * 160 * 3 + Pixelcounter * 3] = colors[0];
+        DisplayPixels[lcd.LY * 160 * 3 + Pixelcounter * 3 + 1] = colors[1];
+        DisplayPixels[lcd.LY * 160 * 3 + Pixelcounter * 3 + 2] = colors[2];
+
+    }
+
+    if(UsingWindow() && WindowYFlag && WindowXFlag) WindowLineCounter++;
 }
 
 unsigned char * GetPixelColor (unsigned char bit1, unsigned char bit2, int pallette)

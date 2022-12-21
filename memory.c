@@ -47,6 +47,7 @@ unsigned char JoypadState;
 
 int DetectMBC (void) 
 {
+    
     // MBC1: max 2MB ROM (125 banks) and/or up to 32KB RAM
     // MBC2: max 256KB ROM (16 banks) and 512x4 bits RAM
     // MBC3: max 2MB ROM (128 banks) and/or 32KB RAM (4 banks) and Timer
@@ -54,20 +55,19 @@ int DetectMBC (void)
     // HuC1: Similar to MBC1 with an Infrared Controller
 
     //Pokemon, 64 banks 1MB, 4 bank RAM, 32KB
-    printf("MBC: %02X, ROM: %02X", ReadByte(0x0147), ReadByte(0x0148));
+    printf("MBC: %02X, ROM: %02X\n", ReadByte(0x0147), ReadByte(0x0148));
     int CartType = (ReadByte(0x0147));
     if((CartType >= 0x0F && CartType <= 0x19)){
         MBCmode = 3;
     } else {MBCmode = 1;}
 }
 
-
 void Reset(void)
 {
 
     memset(VRAM, 0, 0x2000);
     memset(WRAM, 0, 0x2000);
-    memset(DisplayPixels, 0, 256 * 256 * 3);
+    memset(DisplayPixels, 0, 160 * 144 * 3);
 
     registers.A = 0x01;
     registers.F = 0xB0; // If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
@@ -92,6 +92,7 @@ void Reset(void)
     timer.TIMA = 0;
     timer.TMA = 0;
     timer.TAC = 0xF8;
+
     
     lcd.LY = 0;
 
@@ -142,7 +143,8 @@ void Save (void)
     //rombank srambank rammode ramenable
     unsigned short Savedata[] = {registers.AF, registers.BC, registers.DE, registers.HL,
                                 registers.SP, registers.PC, currentRomBank, currentSRAMBank,
-                                RAMMODE, RAMENABLE};
+                                RAMMODE, RAMENABLE, lcd.control, lcd.status, lcd.SCX, lcd.SCY, lcd.LYC,
+                                lcd.WY, lcd.WX};
                                 
     fwrite(ROMBANKS, 0x8000, 1, ptr); //ill figure out how to displace it later
     fwrite(VRAM, sizeof(VRAM), 1, ptr);
@@ -167,7 +169,7 @@ void Load (void)
     sprintf(SavefileName, "%s.sav", Title);
     ptr = fopen(SavefileName,"rb");  
     
-    unsigned short Savedata[10];
+    unsigned short Savedata[17];
                                 
     fread(ROMBANKS, 0x8000, 1, ptr); //ill figure out how to displace it later
     fread(VRAM, sizeof(VRAM), 1, ptr);
@@ -190,6 +192,13 @@ void Load (void)
     currentSRAMBank = Savedata[7];
     RAMMODE = Savedata[8];
     RAMENABLE = Savedata[9];
+    lcd.control = Savedata[10];
+    lcd.status = Savedata[11];
+    lcd.SCX = Savedata[12];
+    lcd.SCY = Savedata[13];
+    lcd.LYC = Savedata[14];
+    lcd.WY = Savedata[15];
+    lcd.WX = Savedata[16];
 
     fclose(ptr);
     
@@ -452,15 +461,15 @@ void WriteByte (unsigned short Address, unsigned char value)
 
         WRAM[Address - 0xC000] = value;
 
-    } else if (Address >= 0xFE00 && Address < 0xFEA0) 
+    } else if (Address >= 0xFE00 && Address <= 0xFE9F) 
     {
         OAM[Address - 0xFE00] = value;
 
-    }else if (Address >= 0xFEA0 && Address <= 0xFEFF) 
+    } else if (Address >= 0xFEA0 && Address <= 0xFEFF) 
     {
         return;
 
-    } else if (Address >= 0xFF00 && Address < 0xFF80) 
+    } else if (Address >= 0xFF00 && Address <= 0xFF7F) 
     {
 
         switch(Address){
@@ -473,6 +482,7 @@ void WriteByte (unsigned short Address, unsigned char value)
         //     break;
         case 0xFF04:
             timer.DIV = 0;
+            timer.TIMA = timer.TMA;
             break;
         case 0xFF05:
             timer.TIMA = value;
@@ -482,7 +492,9 @@ void WriteByte (unsigned short Address, unsigned char value)
             break;
         case 0xFF07: //tima stacking
             int old_freq = timer.TAC & 0x3; //only update if new
+            
             timer.TAC = value;
+            printf("TAC: %02X\n", timer.TAC);
             int new_freq = timer.TAC & 0x3;
             if (old_freq != new_freq) {timercounter = CLOCKSPEED / GetFrequency();}
             break;
@@ -490,7 +502,7 @@ void WriteByte (unsigned short Address, unsigned char value)
             joypad.keys = value;
             break;
         case 0xFF0F: //IF
-            interrupt.flag = 0;//see if working
+            interrupt.flag = value;//see if working
             break;
         case 0xFF40:
             lcd.control = value;

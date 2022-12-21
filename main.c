@@ -54,13 +54,11 @@ HWND getSDLWinHandle(SDL_Window* win)
     SDL_VERSION(&infoWindow.version);
     if (!SDL_GetWindowWMInfo(win, &infoWindow))
     {
-        printf("test");
+        printf("No Window Handler!");
         return NULL;
     }
     return (infoWindow.info.win.window);
 }
-
-
 
 void CreateMenuBar (HWND hwnd)
 {
@@ -119,19 +117,13 @@ void OpenDialog(HWND hwnd) {
 
 }
 
-void DrawViewport (SDL_Renderer* renderer, SDL_Texture* texture, int map)
+void DrawViewport (SDL_Renderer* renderer, SDL_Texture* texture)
 {
-    //map: display entire 32 * 32 tile map, isn't drawn by default by LoadLineFromMap
-
-    SDL_Rect srcrect = { //current display at SCX: 0 and SCY: 0.
-            0, 0, 8 * 20, 8 * 18
-    };
-
     SDL_RenderClear(renderer);
-    SDL_UpdateTexture(texture, NULL, DisplayPixels, 256*3); //changed for logo
+    SDL_UpdateTexture(texture, NULL, DisplayPixels, 160*3); //changed for logo
     
     SDL_RenderCopy(renderer, texture, 
-                    (map) ? NULL : &srcrect, 
+                    NULL, 
                     NULL); //just display entire field for now
 
     SDL_RenderPresent(renderer);
@@ -170,7 +162,7 @@ int main(int argc, char** argv){
     }
 
     SDL_Texture * texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, 
-                                            SDL_TEXTUREACCESS_STREAMING, 256, 256);
+                                            SDL_TEXTUREACCESS_STREAMING, 160, 144);
 
     
     HWND WindowHandler = getSDLWinHandle(window);
@@ -425,7 +417,7 @@ int main(int argc, char** argv){
             //LoadTilesFromMap();
             Update();     
             
-            DrawViewport(renderer, texture, Viewport);
+            DrawViewport(renderer, texture);
             
             if(SpriteExplorer && triggered){
 

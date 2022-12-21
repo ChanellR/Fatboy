@@ -1,6 +1,6 @@
 #pragma once
 
-extern unsigned char DisplayPixels [256 * 256 * 3]; //row, pixel, color
+extern unsigned char DisplayPixels [160 * 144 * 3]; //row, pixel, color
 extern int ScanlineCounter;
 extern unsigned char SpriteExplorerDisplay [256 * 256 * 3];
 extern int triggered;
