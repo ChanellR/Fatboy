@@ -131,12 +131,19 @@ void Reset(void)
    
 }
 
-void LogMemory (void) 
+void Save (void) 
 {
 
     FILE *ptr;
-    ptr = fopen("MemoryLog.bin","wb");  
-    // fwrite(ROMBANK0, sizeof(ROMBANK0), 1, ptr);
+    char SavefileName[20];
+    sprintf(SavefileName, "%s.sav", Title);
+    ptr = fopen(SavefileName,"wb");  
+    //AF BC DE HL SP PC
+    //rombank srambank rammode ramenable
+    unsigned short Savedata[] = {registers.AF, registers.BC, registers.DE, registers.HL,
+                                registers.SP, registers.PC, currentRomBank, currentSRAMBank,
+                                RAMMODE, RAMENABLE};
+                                
     fwrite(ROMBANKS, 0x8000, 1, ptr); //ill figure out how to displace it later
     fwrite(VRAM, sizeof(VRAM), 1, ptr);
     fwrite(SRAMBANKS, 0x2000, 1, ptr);
@@ -146,6 +153,43 @@ void LogMemory (void)
     fwrite(unusablemem, sizeof(unusablemem), 1, ptr);
     fwrite(IO, sizeof(IO), 1, ptr);
     fwrite(HRAM, sizeof(HRAM), 1, ptr);
+    fwrite(Savedata, sizeof(Savedata), 1, ptr);
+
+    fclose(ptr);
+
+}
+
+void Load (void) 
+{
+
+    FILE *ptr;
+    char SavefileName[20];
+    sprintf(SavefileName, "%s.sav", Title);
+    ptr = fopen(SavefileName,"rb");  
+    
+    unsigned short Savedata[10];
+                                
+    fread(ROMBANKS, 0x8000, 1, ptr); //ill figure out how to displace it later
+    fread(VRAM, sizeof(VRAM), 1, ptr);
+    fread(SRAMBANKS, 0x2000, 1, ptr);
+    fread(WRAM, sizeof(WRAM), 1, ptr);
+    fread(WRAM, sizeof(WRAM) - 0x200, 1, ptr);
+    fread(OAM, sizeof(OAM), 1, ptr);
+    fread(unusablemem, sizeof(unusablemem), 1, ptr);
+    fread(IO, sizeof(IO), 1, ptr);
+    fread(HRAM, sizeof(HRAM), 1, ptr);
+    fread(Savedata, sizeof(Savedata), 1, ptr);
+
+    registers.AF = Savedata[0];
+    registers.BC = Savedata[1];
+    registers.DE = Savedata[2];
+    registers.HL = Savedata[3];
+    registers.SP = Savedata[4];
+    registers.PC = Savedata[5];
+    currentRomBank = Savedata[6];
+    currentSRAMBank = Savedata[7];
+    RAMMODE = Savedata[8];
+    RAMENABLE = Savedata[9];
 
     fclose(ptr);
     
@@ -200,9 +244,12 @@ unsigned char ReadByte (unsigned short Address)
         if(RAMMODE == 1 && MBCmode == 1) currentRomBank & 0x1F;
         if (currentRomBank == 0) currentRomBank = 1;
         int Romoffset = currentRomBank;
-
+        //if(Romoffset > 0x10 && triggered) printf("rombank: %02X switches: %lu\n", currentRomBank, romswitches);
+        //if(Address == 0x4006) printf("in.\n");
         //printf("reading ROMMBANK: %x\n", Romoffset);
         output = ROMBANKS[Address - 0x4000 + ((Romoffset) * 0x4000)]; //0000 is rombank 1
+        
+        //if(Address == 0x4006) {printf("instruction: %02X\n", output); printf("out.\n");}
          
     } else if (Address >= 0x8000 && Address <= 0x9FFF) 
     {
@@ -347,7 +394,8 @@ void WriteByte (unsigned short Address, unsigned char value)
         
         RomBankLo = (value > 0) ? (value & 0x1F) : 1;
         romswitches++;
-        if(MBCmode == 3) currentRomBank = value & 0x7F; printf("rombank: %02X switches: %lu\n", currentRomBank, romswitches);
+        if(MBCmode == 3) currentRomBank = value & 0x7F; 
+        
         
 
 

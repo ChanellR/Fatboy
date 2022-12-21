@@ -19,3 +19,6 @@ void LogMemory (void);
 void DoDMATransfer(unsigned char Addr);
 void LoadRomTitle (void);
 int DetectMBC (void);
+
+void Save(void);
+void Load(void);

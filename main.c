@@ -1,3 +1,4 @@
+#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -10,15 +11,15 @@
 #include "gpu.h"
 #include "src\include\SDL2\SDL_syswm.h"
 
-
-
 #define WM_MESSAGE(x) (x.syswm.msg->msg.win)
 
 #define IDM_FILE_OPEN 1
 #define IDM_FILE_QUIT 2
-#define IDM_VIEW_SWAP 3
-#define IDM_VIEW_SPRITE 4
-#define IDM_VIEW_SPRITEEXPLORER 5
+#define IDM_VIEW_MAP 3
+#define IDM_VIEW_SHEET 4
+#define IDM_VIEW_SPRITES 5
+#define IDM_FILE_SAVE 6
+#define IDM_FILE_LOAD 7
 
 char CurrentRom[40];
 
@@ -26,6 +27,8 @@ int WindowWidth = 160 * 5;
 int WindowHeight = 144 * 5;
 int RomLoaded = 0;
 int triggered = 0;
+
+HMENU hMenuView;
 
 void Test (void) 
 {
@@ -57,7 +60,7 @@ HWND getSDLWinHandle(SDL_Window* win)
     return (infoWindow.info.win.window);
 }
 
-HMENU hMenuView;
+
 
 void CreateMenuBar (HWND hwnd)
 {
@@ -74,12 +77,12 @@ void CreateMenuBar (HWND hwnd)
     AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_OPEN, L"&Open");
     AppendMenuW(hMenuFile, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_QUIT, L"&Quit");
+    AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_SAVE, L"&Save");
+    AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_LOAD, L"&Load");
 
-    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SWAP, L"&ViewPort");
-    CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_CHECKED);
-    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITE, L"&View Tile Map");
-    CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_UNCHECKED);
-    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITEEXPLORER, L"&Open Explorer");
+    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SHEET, L"&View Sprite Sheet");
+    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_MAP, L"&View Tile Map");
+    AppendMenuW(hMenuView, MF_STRING, IDM_VIEW_SPRITES, L"&Open Explorer/View Sprites");
 
     AppendMenuW(hMenubar, MF_POPUP, (UINT_PTR) hMenuFile, L"&File");
     AppendMenuW(hMenubar, MF_POPUP, (UINT_PTR) hMenuView, L"&View");
@@ -116,9 +119,7 @@ void OpenDialog(HWND hwnd) {
 
 }
 
-
-
-void DrawViewportWithScrolling (SDL_Renderer* renderer, SDL_Texture* texture, int map)
+void DrawViewport (SDL_Renderer* renderer, SDL_Texture* texture, int map)
 {
     //map: display entire 32 * 32 tile map, isn't drawn by default by LoadLineFromMap
 
@@ -138,7 +139,6 @@ void DrawViewportWithScrolling (SDL_Renderer* renderer, SDL_Texture* texture, in
     return;
 
 }
-
 
 int main(int argc, char** argv){
 
@@ -194,7 +194,7 @@ int main(int argc, char** argv){
         while(SDL_PollEvent(&event)){
 
             switch(event.type){
-
+                
                 case SDL_SYSWMEVENT:
 
                     switch(WM_MESSAGE(event).msg){
@@ -209,9 +209,17 @@ int main(int argc, char** argv){
                                     MessageBeep(MB_ICONINFORMATION);
                                     OpenDialog(WindowHandler);
                                     break;
+
+                                case IDM_FILE_SAVE:
                                     
-                                
-                    
+                                    Save();
+                                    break;
+
+                                case IDM_FILE_LOAD:
+                                    //Reset();
+                                    Load();
+                                    break;
+
                                 case IDM_FILE_QUIT:
                                 
                                     RomLoaded = 0;
@@ -219,43 +227,19 @@ int main(int argc, char** argv){
                                     SendMessage(SpriteExplorerHandler, WM_CLOSE, 0, 0);
                                     break; 
 
-                                case IDM_VIEW_SWAP:
-                                
-                                    UINT state = GetMenuState(hMenuView, IDM_VIEW_SWAP, MF_BYCOMMAND); 
-
-                                    if (state == MF_CHECKED) {
-
-                                        Viewport = 1;
-                                        CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_UNCHECKED);  
-
-                                    } else {
-
-                                        Viewport = 0;
-                                        CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_CHECKED);  
-                                    }
-                    
+                                case IDM_VIEW_SHEET:
+                                    ViewSpriteSheet = 2;
                                     break;
 
-                                case IDM_VIEW_SPRITE:
+                                case IDM_VIEW_MAP:
 
-                                    state = GetMenuState(hMenuView, IDM_VIEW_SPRITE, MF_BYCOMMAND); 
-
-                                    if (state == MF_CHECKED) {
-
-                                        ViewSpriteSheet = 0;
-                                        CheckMenuItem(hMenuView, IDM_VIEW_SPRITE, MF_UNCHECKED);  
-
-                                    } else {
-
-                                        ViewSpriteSheet = 1;
-                                        CheckMenuItem(hMenuView, IDM_VIEW_SWAP, MF_UNCHECKED); //zoom out for sprites
-                                        CheckMenuItem(hMenuView, IDM_VIEW_SPRITE, MF_CHECKED);  
-
-                                    }
+                                    ViewSpriteSheet = 1;
                                     break;
                                 
-                                case IDM_VIEW_SPRITEEXPLORER:
+                                case IDM_VIEW_SPRITES:
+                                    ViewSpriteSheet = 0;
                                     if(triggered == 1) break;
+
                                     SpriteExplorer = SDL_CreateWindow("Explorer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
                                             600, 600, SDL_WINDOW_RESIZABLE);
                                     
@@ -322,14 +306,14 @@ int main(int argc, char** argv){
                                 case 0x5A: //Z (A)
 
                                     
-                                    JoypadState |= 0x10;
+                                    JoypadState |= 0x20;
                                     RequestInterrupt(4);
                                     break;
 
                                 case 0x58: //X (B)
 
                                     
-                                    JoypadState |= 0x20;
+                                    JoypadState |= 0x10;
                                     RequestInterrupt(4);
                                     break;
                             }
@@ -380,19 +364,25 @@ int main(int argc, char** argv){
 
                                 case 0x5A: //Z (A)
 
-                                    JoypadState &= ~(0x10);
-
-                                    break;
-
-                                case 0x58: //X (B)
-
-                                    
                                     JoypadState &= ~(0x20);
 
                                     break;
+
+                                case 0x58: //X (B)                                   
+                                    JoypadState &= ~(0x10);
+                                    break;
+
+                                case VK_OEM_PLUS:
+                                    fps += 10;
+                                    printf("frame limit: %d\n", fps);
+                                    break;
+                                case VK_OEM_MINUS:
+                                    fps -= 10;
+                                    fps = (fps == 0) ? 10 : fps;
+                                    printf("frame limit: %d\n", fps);
+                                    break;
                             }
                             
-
                         break;
                     }
 
@@ -421,8 +411,6 @@ int main(int argc, char** argv){
                     SDL_DestroyTexture(SpriteExplorerTexture);
                     SDL_DestroyRenderer(SpriteExplorerrenderer);
 
-                        
-
                     running = false;
                     break;
 
@@ -433,11 +421,12 @@ int main(int argc, char** argv){
         }
 
         if(RomLoaded){
-
-            Update();     
+            
             //LoadTilesFromMap();
-            DrawViewportWithScrolling(renderer, texture, Viewport);
-
+            Update();     
+            
+            DrawViewport(renderer, texture, Viewport);
+            
             if(SpriteExplorer && triggered){
 
                 HWND SpriteExplorerHandler = getSDLWinHandle(SpriteExplorer);
@@ -446,7 +435,18 @@ int main(int argc, char** argv){
                 0, 0, 8 * 21, 8 * 21};
 
                 memset(SpriteExplorerDisplay, 0xE8, 256 * 256 * 3);
-                if(ViewSpriteSheet) LoadTilesFromMap(); else LoadOAM();
+
+                switch(ViewSpriteSheet){
+                    case 1:
+                        LoadTilesFromMap();
+                        break;
+                    case 0:
+                        LoadOAM();
+                        break;
+                    case 2:
+                        LoadSpriteSheet();
+                        break;
+                } 
 
                 SDL_RenderClear(SpriteExplorerrenderer);
                 
@@ -466,7 +466,8 @@ int main(int argc, char** argv){
         }
 
         int delta = SDL_GetTicks() - startLoop;
-        //if(delta < DesiredDelta) SDL_Delay(DesiredDelta - delta);
+        DesiredDelta = 1000/fps;
+        if(delta < DesiredDelta) SDL_Delay(DesiredDelta - delta);
 
 
     }

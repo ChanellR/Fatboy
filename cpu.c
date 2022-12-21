@@ -1830,8 +1830,6 @@ void HandleInterrupt(void)
 
     // interrupt call
 }
-
-
 	
 void Update(void)
 { // gpu step
@@ -1845,17 +1843,16 @@ void Update(void)
     while (currentcycles < MAXCYCLES)
     {
         
-        // joypad.keys &= ~(0x08);
-        // RequestInterrupt(4);
         int cycles = CpuStep();
         
         // if(triggered)
         // {
-        //     if(registers.PC > 0x4000) Outputinstructions();
-        //     // printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
-        //     //                 registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
-        //     //                 ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
-        //     // printf("IF: %02X, IE: %02X, IME: %d\n", interrupt.flag, interrupt.enable, interrupt.master);
+        //     if(currentRomBank == 0x1F) {
+        //         printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
+        //                     registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+        //                     ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+        //         printf("IF: %02X, IE: %02X, IME: %d\n", interrupt.flag, interrupt.enable, interrupt.master);
+        //     }
         // }
 
         cycles += cyclesRegained; //after failed jmp, resets

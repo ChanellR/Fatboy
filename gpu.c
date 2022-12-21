@@ -209,7 +209,7 @@ void LoadSpritesOnScreen (void) {
         //Attributes
         int SpriteVMirror = ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x40;
         int SpriteHMirror = ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x20;
-        int SpritePallette = ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x10;
+        int SpritePallette = ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x03;
         //BG override
         SpritePallette = (ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x80) ? 2: SpritePallette;
 
@@ -253,6 +253,7 @@ void LoadSpritesOnScreen (void) {
 
 
                 unsigned char *colors;
+                if(!strcmp(Title, "DR.MARIO")) SpritePallette = 2;
                 colors = GetPixelColor(bit1, bit2, SpritePallette);
 
                 //00 means transparent, so no write
@@ -522,6 +523,10 @@ void LoadTilesFromMap (void)
     //displays all tiles currently mapped in the BG, doesn't hold scanline functionality but makes sense. 
     //returns 8 x 8 pixel bitmap
     //unsigned only 0x8000-
+
+    //printf("SCX: %02X\n", lcd.SCX);
+    //printf("SCY: %02X\n", lcd.SCY);
+
     unsigned short MapAddress = (lcd.control) ? GetBGMAPAddress() : 0x9800; 
     unsigned short DataAddress = (lcd.control) ? GetDataAddress() : 0x8000;
     
@@ -561,6 +566,10 @@ void LoadTilesFromMap (void)
                 SpriteExplorerDisplay[tileOffset + lineoffset + PixelOffset] = colors[0];
                 SpriteExplorerDisplay[tileOffset + lineoffset + PixelOffset + 1] = colors[1];
                 SpriteExplorerDisplay[tileOffset + lineoffset + PixelOffset + 2] = colors[2];
+
+                // DisplayPixels[tileOffset + lineoffset + PixelOffset] = colors[0];
+                // DisplayPixels[tileOffset + lineoffset + PixelOffset + 1] = colors[1];
+                // DisplayPixels[tileOffset + lineoffset + PixelOffset + 2] = colors[2];
     
                 
             }
@@ -574,40 +583,46 @@ void LoadLineFromMap (void)
 {
     //scrolls automatically to fit everything within 160 * 144 in display
     //saves from having to dynamically asdjust the src and dst rect which would case distortion
-    
     unsigned short DataAddress = (lcd.control) ? GetDataAddress() : 0x8000;
     unsigned short TileIDAddress = (lcd.control) ? GetBGMAPAddress() : 0x9800;
 
-
-    int Tileshift = (lcd.SCX/8);
-
     int firstTileInLine = ((((unsigned char)lcd.LY + lcd.SCY) / 8) * 32);    
-    int lastTileInLine = (((unsigned char)(lcd.LY + lcd.SCY )/ 8) * 32) + 31; // char so it scrolls
+    int firstTiletoWrite = (((unsigned char)(lcd.LY + lcd.SCY) / 8) * 32) + lcd.SCX/8;
+    int tile = 0;
 
-    int firstTiletoWrite = (((unsigned char)(lcd.LY + lcd.SCY) / 8) * 32) + Tileshift;
-    
-    for (int tile = firstTiletoWrite; tile < firstTiletoWrite + 20; tile++) //dont do 32 tiles after
+    //printf("first to write: %d, lastinline: %d \n", firstTiletoWrite, lastTileInLine);
+
+    unsigned char Pixel = lcd.SCX;
+
+    for (int tilecounter = firstTiletoWrite; tilecounter < firstTiletoWrite + 20; tilecounter++) //dont do 32 tiles after
     {
+        tile = firstTileInLine + (Pixel/8);
 
-        tile = (tile > lastTileInLine) ? firstTileInLine + (tile - lastTileInLine) : tile;
-        
-        int tileOffset = ((tile - firstTiletoWrite) % 32) * 8 * 3; //row then coloumn
+        int tileOffset = ((tilecounter - firstTiletoWrite) % 32) * 8 * 3; //row then coloumn
 
-        //if using window, check tile
-        int WindowStartingTile = ( (lcd.WX - 7) / 8);
-        // printf("windowstartingtile: %d", WindowStartingTile);
+        int TileID;
+        int offset;
 
         int Windowtileshift = 0;
-        if(UsingWindow() && (lcd.LY >= lcd.WY) && ((tile % 32) >= WindowStartingTile)) //((tile % 32) >= WindowStartingTile)
+        int WindowStartingTile = (lcd.WY/8) * 32 + (lcd.WX - 7) / 8;
+        
+        if(UsingWindow() && (lcd.LY >= lcd.WY))// && (tile >= WindowStartingTile))
         {
-
+            
             TileIDAddress = GetWINMAPAddress();
             Windowtileshift = ((lcd.WY - lcd.SCY)/8) * 32; //number of lines because WY starts the window at the beginning
+
+            TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(TileIDAddress + (tilecounter - firstTiletoWrite) + ((lcd.LY-lcd.WY)/8)*32 ) : (signed char) ReadByte(TileIDAddress + (tilecounter - firstTiletoWrite) + ((lcd.LY-lcd.WY)/8)*32);
+            offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 128) * 16);
+
+        } else {
+            
+            TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(TileIDAddress + tile - Windowtileshift) : (signed char) ReadByte(TileIDAddress + tile - Windowtileshift);
+            offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 128) * 16);
+        
         }
 
-        int TileID = (DataAddress == 0x8000) ? (unsigned char) ReadByte(TileIDAddress + tile - Windowtileshift) : (signed char) ReadByte(TileIDAddress + tile - Windowtileshift);
-        int offset = (DataAddress == 0x8000) ? (TileID * 16) : ((TileID + 128) * 16);
-        
+        Pixel += 8;
         unsigned short TileDataAddress = DataAddress;
         TileDataAddress += (offset); 
 
