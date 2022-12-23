@@ -7,8 +7,8 @@
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "Debugging.h"
-#include "gpu.h"
+#include "ppu.h"
+
 #include "src\include\SDL2\SDL_syswm.h"
 
 #define WM_MESSAGE(x) (x.syswm.msg->msg.win)
@@ -137,7 +137,7 @@ int main(int argc, char** argv){
     int fps = 60;
     int DesiredDelta = 1000 / fps;
     int Viewport = 0; //0: viewport, 1: map, 2: sprite sheet
-    int ViewSpriteSheet = 0;
+    int ViewSpriteSheet = 1;
     
     Reset();
 

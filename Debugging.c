@@ -4,8 +4,7 @@
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "Debugging.h"
-#include "gpu.h"
+#include "ppu.h"
 
 
 unsigned char instruction;

@@ -5,8 +5,7 @@
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "Debugging.h"
-#include "gpu.h"
+#include "ppu.h"
 
 #define CLOCKSPEED 4194304
 
@@ -125,9 +124,9 @@ void Reset(void)
     lcd.WY = 0;
     lcd.WX = 0;
 
-    // WriteByte(0xFF47, 0xFC); // BGP = 0xFF;
-    // WriteByte(0xFF48, 0xFF);
-    // WriteByte(0xFF49, 0xFF);
+    WriteByte(0xFF47, 0xFC); 
+    WriteByte(0xFF48, 0xFF);
+    WriteByte(0xFF49, 0xFF);
 
    
 }
@@ -249,17 +248,11 @@ unsigned char ReadByte (unsigned short Address)
     } else if (Address >= 0x4000 && Address <= 0x7FFF) 
     {
         
-        
         if(RAMMODE == 1 && MBCmode == 1) currentRomBank & 0x1F;
         if (currentRomBank == 0) currentRomBank = 1;
         int Romoffset = currentRomBank;
-        //if(Romoffset > 0x10 && triggered) printf("rombank: %02X switches: %lu\n", currentRomBank, romswitches);
-        //if(Address == 0x4006) printf("in.\n");
-        //printf("reading ROMMBANK: %x\n", Romoffset);
         output = ROMBANKS[Address - 0x4000 + ((Romoffset) * 0x4000)]; //0000 is rombank 1
-        
-        //if(Address == 0x4006) {printf("instruction: %02X\n", output); printf("out.\n");}
-         
+                 
     } else if (Address >= 0x8000 && Address <= 0x9FFF) 
     {
 
@@ -267,7 +260,6 @@ unsigned char ReadByte (unsigned short Address)
 
     } else if (Address >= 0xA000 && Address <= 0xBFFF) 
     {
-        //printf("reading SRAMBANK: %i", currentSRAMBank);
         int SRAMoffset = (RAMMODE == 1) ?  (currentSRAMBank) : 0;
 
         if (RAMENABLE) {
@@ -463,7 +455,7 @@ void WriteByte (unsigned short Address, unsigned char value)
 
     } else if (Address >= 0xFE00 && Address <= 0xFE9F) 
     {
-        OAM[Address - 0xFE00] = value;
+        if((lcd.status & 0x03) < 2) OAM[Address - 0xFE00] = value;
 
     } else if (Address >= 0xFEA0 && Address <= 0xFEFF) 
     {
@@ -590,7 +582,9 @@ unsigned short ReadStack (void)
 
 void DoDMATransfer(unsigned char Addr)
 {
-    
+    //see if there are timing issues, what exactly is happening during the opening
+    //movie that makes it so scuffed for sprites. 
+
     cyclesRegained += 160; //160 machine cycles per DMA
     unsigned short address = Addr << 8 ; // source address is 0xXX00;
     for (int i = 0 ; i < 0xA0; i++)

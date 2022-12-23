@@ -1,12 +1,10 @@
 #include <stdio.h>
 #include <string.h>
-#include <windows.h>
 
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "Debugging.h"
-#include "gpu.h"
+#include "ppu.h"
 
  //every dot and their hue
 
@@ -163,14 +161,13 @@ void DrawScanline(void) {
     if(lcd.control & 0x80) {
         
         LoadLineFromMap();
-        //LoadTilesFromMap();
 
     } 
     
     if (lcd.control & 0x02) {
 
-        LoadSpritesOnScreen();
-        //LoadSpriteLine();
+        //LoadSpritesOnScreen();
+        LoadSpriteLine();
 
     }
 }
@@ -267,114 +264,88 @@ void LoadSpritesOnScreen (void) {
 
 }
 
-void LoadSpriteLine (void) {
-    //int UnderBGWIN = lcd.control & 0x01;
+void LoadSpriteLine (void)
+{
+    //if(lcd.status & 0x03 != 1) return;
+    unsigned short DataAddress = 0x8000;
+    unsigned short OAMAddress = 0xFE00;
 
-    unsigned short DataAddress = 0x8000; //sprites stored 0x8000 - 0x8FFF;
+    int SpritesinLine = 0;
+    int SpriteHeight = (lcd.control & 0x04) ? 16 : 8;
 
-    int spritecounter = 0;
-    unsigned char ValidSprites[10];
-    unsigned char SpriteHeight = (lcd.control & 0x04) ? 16 : 8; //double or not
-
-    //memset(ValidSprites, 0, 10);
-
-    for (int SpriteNum = 0; SpriteNum < 40; SpriteNum++)
+    for (int Sprite = 0; Sprite < 40; Sprite++)
     {
-        //not reading directly from OAM yet, for whatever reason, i'll figure it out
-        unsigned char SpriteYPos = ReadByte(0xFE00 + ( SpriteNum * 4 )); //top is this -16
-        //is the sprite on LY
-        if(lcd.LY >= (SpriteYPos - 16) && lcd.LY < (SpriteYPos - 16 + SpriteHeight)) 
-        {
-            ValidSprites[spritecounter] = SpriteNum;
-            spritecounter++;
-            
+        if(SpritesinLine == 10) break;
+
+        int SpriteYpos = ReadByte(OAMAddress + Sprite * 4) - 16;
+
+        if(SpriteYpos == -16 || SpriteYpos == 144) continue;
+        if(!(lcd.LY >= SpriteYpos && lcd.LY < (SpriteYpos + SpriteHeight))) continue;
+
+        int SpriteXpos = ReadByte(OAMAddress + Sprite * 4 + 1) - 8;
+        if (SpriteXpos == -8) {SpritesinLine++; continue;}
+
+        int SpriteID = ReadByte(OAMAddress + Sprite * 4 + 2);
+        //printf("Sprite#: %d, Y: %d, X: %d, ID: %02X\n", Sprite, SpriteYpos, SpriteXpos, SpriteID);
+        
+        //Attributes
+        int SpriteVMirror = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x40;
+        int SpriteHMirror = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x20;
+        int SpritePallette = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x03;
+        int SecondSpritePallette = ReadByte(OAMAddress + (Sprite + 1) * 4  + 3) & 0x03; //for second sprite in double length
+
+        unsigned char byte1;
+        unsigned char byte2;
+
+        if(SpriteVMirror){
+
+            byte1 = ReadByte( DataAddress + SpriteID * 16 + (SpriteHeight - (lcd.LY - SpriteYpos)) * 2); //off set by their position in the tile
+            byte2 = ReadByte( DataAddress + SpriteID * 16 + (SpriteHeight - (lcd.LY - SpriteYpos)) * 2 + 1);
+
+        } else {
+
+            byte1 = ReadByte( DataAddress + SpriteID * 16 + (lcd.LY - SpriteYpos) * 2); //off set by their position in the tile
+            byte2 = ReadByte( DataAddress + SpriteID * 16 + (lcd.LY - SpriteYpos) * 2 + 1);
+
         }
 
-        if(spritecounter == 10) break;
+        for (int pixel = 0; pixel < 8; pixel++)
+        {   
+            if((lcd.LY - SpriteYpos) > 7) SpritePallette = SecondSpritePallette;
+            if(SpriteXpos < 0) pixel += -1 * SpriteXpos;
 
-    }
-    
-    unsigned char Xpositions[10];
-    //memset(Xpositions, 0, 10);
-    //populate Xpositions
-    for (int sprite = 0; sprite < 10; sprite++)
-    {   
-        Xpositions[sprite] = ReadByte(0xFE00 + ValidSprites[sprite] * 4 + 1);
-    }
+            unsigned char bit1;
+            unsigned char bit2;
 
-    unsigned char SortedSprites[10];
-    //memset(SortedSprites, 0, 10);
-    //sort the sprites in terms of which will be drawn first so that overlap functions correctly
-    for (int times = 0; times < 10; times++)
-    {
-        int RightMostSprite = 0;
-        int HighestX = -1;
-        
-        for (int sprites = 0; sprites < 10; sprites++){
-
-            int CurrXpos = Xpositions[sprites];
-
-            if((CurrXpos > HighestX)) 
+            if (SpriteHMirror) 
             {
-                HighestX = CurrXpos;
-                RightMostSprite = sprites;
+                
+                bit1 = (byte1 & (0x01 << pixel));
+                bit2 = (byte2 & (0x01 << pixel));
+
+            }
+            else
+            {
+                bit1 = (byte1 & (0x80 >> pixel));
+                bit2 = (byte2 & (0x80 >> pixel));
             }
             
-        }
-
-        SortedSprites[times] = RightMostSprite;
-        Xpositions[RightMostSprite] = -1; //clears that sprite from being chosen again.
-    }
-
-    int spritesloaded = 0;
-    for (int SpritetoLoad = 0; SpritetoLoad < 10; SpritetoLoad++) 
-    {
-
-        //alter to fix filtering 
-        unsigned char SpriteYPos = ReadByte(0xFE00 + SortedSprites[SpritetoLoad] * 4);
-        //if(!(lcd.LY >= (SpriteYPos - 16) && lcd.LY < (SpriteYPos - 16 + SpriteHeight))) continue;
-
-        unsigned char SpriteXpos = ReadByte(0xFE00 + SortedSprites[SpritetoLoad] * 4 + 1);
-        
-        int SpritePixelOffset = (SpriteXpos - 8) * 3;
-
-        unsigned short SpriteDataAddress = DataAddress;
-        
-        int offset = ReadByte(0xFE00 + SortedSprites[SpritetoLoad] * 4 + 2);
-        SpriteDataAddress += (offset * 16);
-        
-        int lineofSprite = (lcd.LY - (SpriteYPos - 16)); //check functionality across sizes
-
-        int lineoffset = (lcd.LY) * (256) * 3;// should start printing only @lcd.LY independent of positon of lcd.SCY
-
-        unsigned char byte1 = ReadByte( SpriteDataAddress + lineofSprite * 2); //off set by their position in the tile
-        unsigned char byte2 = ReadByte( SpriteDataAddress + lineofSprite * 2 + 1);
-
-        for(int pixel = 0; pixel < 8; pixel++)
-        {
-            
-            int PixelOffset = pixel * 3;
-
-            unsigned char bit1 = (byte1 & (0x80 >> pixel));
-            unsigned char bit2 = (byte2 & (0x80 >> pixel));
-
             unsigned char *colors;
-            colors = GetPixelColor(bit1, bit2, 0);
+            colors = GetPixelColor(bit1, bit2, SpritePallette);
 
             //00 means transparent, so no write
             if(bit1 || bit2){
 
-                DisplayPixels[SpritePixelOffset + lineoffset + PixelOffset] = colors[0];
-                DisplayPixels[SpritePixelOffset + lineoffset + PixelOffset + 1] = colors[1];
-                DisplayPixels[SpritePixelOffset + lineoffset + PixelOffset + 2] = colors[2];
+                DisplayPixels[lcd.LY * 160 * 3 + SpriteXpos * 3 + pixel * 3] = colors[0];
+                DisplayPixels[lcd.LY * 160 * 3 + SpriteXpos * 3 + pixel * 3 + 1] = colors[1];
+                DisplayPixels[lcd.LY * 160 * 3 + SpriteXpos * 3 + pixel * 3 + 2] = colors[2];
 
             }
-            
-            
-        }
-        
-    }
 
+        }
+
+
+    }
 }
 
 unsigned char * LoadNintendoLogo (void){
@@ -574,8 +545,6 @@ void LoadTilesFromMap (void)
 
 
 }
-
-
 
 void LoadLineFromMap (void)
 {

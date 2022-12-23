@@ -5,8 +5,7 @@
 #include "header.h"
 #include "memory.h"
 #include "control.h"
-#include "Debugging.h"
-#include "gpu.h"
+#include "ppu.h"
 
 
 #define CLOCKSPEED 4194304
