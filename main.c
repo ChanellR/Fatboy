@@ -109,6 +109,7 @@ void OpenDialog(HWND hwnd) {
   if(GetOpenFileNameA(&ofn))
   {
     Reset();  
+    remove("instructionLog.txt");
     LoadRom(ofn.lpstrFile);
     DetectMBC();
     //LoadTilesFromMap();
@@ -141,10 +142,16 @@ int main(int argc, char** argv){
     
     Reset();
 
+
     if(SDL_Init(SDL_INIT_VIDEO) < 0){
         printf("Error: SDL failed to initialize\nSDL Error: '%s'\n", SDL_GetError());
         return 1;
     }
+
+    if (SDL_Init(SDL_INIT_AUDIO) < 0) {
+		printf("SDL failed to initialize : %s\n", SDL_GetError());
+		
+	}
 
     SDL_Window *window = SDL_CreateWindow("Fatboy", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
                                             WindowWidth, WindowHeight, SDL_WINDOW_RESIZABLE);
@@ -176,8 +183,10 @@ int main(int argc, char** argv){
     CreateMenuBar(WindowHandler);  
     
     SDL_EventState(SDL_SYSWMEVENT, SDL_ENABLE);
-    
     bool running = true;
+
+    
+    
     while(running){
 
         int startLoop = SDL_GetTicks();
@@ -414,9 +423,7 @@ int main(int argc, char** argv){
 
         if(RomLoaded){
             
-            //LoadTilesFromMap();
             Update();     
-            
             DrawViewport(renderer, texture);
             
             if(SpriteExplorer && triggered){
@@ -451,7 +458,6 @@ int main(int argc, char** argv){
 
                 SDL_RenderPresent(SpriteExplorerrenderer);
 
-                
 
             }
 

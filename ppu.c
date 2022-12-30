@@ -9,7 +9,7 @@
  //every dot and their hue
 
 struct LCD lcd;
-int ScanlineCounter; //456 cycles per scan line, there is a 146 vblank buffer
+int ScanlineCounter; //456 cycles per scan line
 unsigned char DisplayPixels [160 * 144 * 3];
 unsigned char SpriteExplorerDisplay [256 * 256 * 3];
 unsigned char WindowXFlag = 0;
@@ -166,7 +166,7 @@ void DrawScanline(void) {
     
     if (lcd.control & 0x02) {
 
-        //LoadSpritesOnScreen();
+        // LoadSpritesOnScreen();
         LoadSpriteLine();
 
     }
@@ -458,7 +458,6 @@ void LoadSpriteSheet (void)
             unsigned char byte1 = ReadByte( DataAddress + line * 2 ); //off set by their position in the tile
             unsigned char byte2 = ReadByte( DataAddress + line * 2 + 1 );
 
-            
             for(int pixel = 0; pixel < 8; pixel++)
             {
                 
@@ -468,7 +467,8 @@ void LoadSpriteSheet (void)
                 unsigned char bit2 = (byte2 & (0x80 >> pixel));
 
                 unsigned char *colors;
-                colors = GetPixelColor(bit1, bit2, 2);
+                int pallette = (tile < 16 * 8) ? 0 : 2;
+                colors = GetPixelColor(bit1, bit2, pallette);
 
                 SpriteExplorerDisplay[tileOffset + lineoffset + PixelOffset] = colors[0];
                 SpriteExplorerDisplay[tileOffset + lineoffset + PixelOffset + 1] = colors[1];
@@ -580,7 +580,7 @@ void LoadLineFromMap (void)
         int currentBGTile = ((Ypos)/8)*32 + ((Xpos)/8); //The tile to be writing in this position.
         if(Pixelcounter == lcd.WX - 7) WindowXFlag = 1;
         
-        if((Xpos) % 8 == 0 || Pixelcounter == 0)
+        if((Xpos) % 8 == 0 || Pixelcounter == 0) //when to grab new tile
         {
             if(UsingWindow() && WindowYFlag && WindowXFlag) 
             {

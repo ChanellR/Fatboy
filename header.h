@@ -198,3 +198,5 @@ void LoadRom (char * Filename);
 void Update (void);
 
 void Reset (void);
+
+void EngageSound(void);

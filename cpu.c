@@ -6,7 +6,7 @@
 #include "memory.h"
 #include "control.h"
 #include "ppu.h"
-
+#include "apu.h"
 
 #define CLOCKSPEED 4194304
 // #define TIMA 0xFF05
@@ -311,9 +311,15 @@ const struct Instruction instructions[256] = {
 
 int Outputinstructions (void){
 
-    printf("PC: 00:%04X (%02X %02X %02X %02X)\n", 
-                registers.PC, ReadByte(registers.PC), ReadByte(registers.PC + 1), 
-                ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+    // printf("PC: 00:%04X (%02X %02X %02X %02X)\n", 
+    //             registers.PC, ReadByte(registers.PC), ReadByte(registers.PC + 1), 
+    //             ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+    
+    printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
+                        registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
+                        ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
+            printf("IF: %02X, IE: %02X, IME: %d\n", interrupt.flag, interrupt.enable, interrupt.master);
+ 
 
 }
 
@@ -1481,13 +1487,15 @@ void RST(unsigned char Opcode)
     struct opcode rst;
     rst.inst = Opcode;
     unsigned char RSTAddr[8] = {0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38}; // Goes straight to these positions
+    //if(rst.r1 == 7) Outputinstructions();
+    // if(ReadByte(registers.SP))
     CALL(0x00, RSTAddr[rst.r1]);
 }
 
 void POP(unsigned char Opcode)
 {
 
-        unsigned short *botRowRegs[7] = {&registers.BC, NULL, &registers.DE, NULL, &registers.HL, NULL, &registers.AF};
+    unsigned short *botRowRegs[7] = {&registers.BC, NULL, &registers.DE, NULL, &registers.HL, NULL, &registers.AF};
     struct opcode pop;
     pop.inst = Opcode;
     // if(pop.r1 == 0x110) {
@@ -1840,19 +1848,9 @@ void Update(void)
     const int MAXCYCLES = (69905 / 4); //M cycles per 1/60th of second
     unsigned int currentcycles = 0;
 
-
     while (currentcycles < MAXCYCLES)
     {
-        //printf("TIMA: %02X Cycles: %lu\n", timer.TIMA, CyclesPast);
         int cycles = CpuStep();
-        
-        // if(triggered)
-        // {
-        //     printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n", 
-        //                 registers.A, registers.F, registers.B, registers.C, registers.D, registers.E, registers.H, registers.L, registers.SP, registers.PC, 
-        //                 ReadByte(registers.PC), ReadByte(registers.PC + 1), ReadByte(registers.PC + 2), ReadByte(registers.PC + 3));
-        //     printf("IF: %02X, IE: %02X, IME: %d\n", interrupt.flag, interrupt.enable, interrupt.master);
-        // }
 
         cycles += cyclesRegained; //after failed jmp, resets
         cyclesRegained = 0;
@@ -1861,8 +1859,7 @@ void Update(void)
 
         UpdateGraphics(cycles);
         UpdateTiming(cycles);
-        // printf("IF: %02X, IE: %02X, IME: %d, TIMA: %02X, TMA: %02X, TAC: %02X\n", interrupt.flag, interrupt.enable, interrupt.master,
-        // timer.TIMA, timer.TMA, timer.TAC);
+        //UpdateSoundChannels(cycles);
         HandleInterrupt();
         
         
