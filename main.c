@@ -111,6 +111,7 @@ void OpenDialog(HWND hwnd) {
     Reset();  
     remove("instructionLog.txt");
     LoadRom(ofn.lpstrFile);
+    Load();
     DetectMBC();
     //LoadTilesFromMap();
 
@@ -222,7 +223,8 @@ int main(int argc, char** argv){
                                     break;
 
                                 case IDM_FILE_QUIT:
-                                
+
+                                    Save();
                                     RomLoaded = 0;
                                     SendMessage(WindowHandler, WM_CLOSE, 0, 0);
                                     SendMessage(SpriteExplorerHandler, WM_CLOSE, 0, 0);
@@ -303,6 +305,13 @@ int main(int argc, char** argv){
                                     JoypadState |= 0x40;
                                     RequestInterrupt(4);
                                     break;
+                                
+                                case VK_BACK:
+                                    //all buttons
+                                    //for Zelda save
+                                    JoypadState = 0xFF;
+                                    RequestInterrupt(4);
+                                    break;
 
                                 case 0x5A: //Z (A)
 
@@ -361,6 +370,12 @@ int main(int argc, char** argv){
                                     
                                     JoypadState &= ~(0x40);
 
+                                    break;
+
+                                case VK_BACK:
+                                    //all buttons
+                                    //for Zelda save
+                                    JoypadState = 0x0;
                                     break;
 
                                 case 0x5A: //Z (A)

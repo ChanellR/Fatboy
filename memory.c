@@ -138,28 +138,28 @@ void Reset(void)
 
 void Save (void) 
 {
-
+    //saves SRAM Data
     FILE *ptr;
     char SavefileName[20];
     sprintf(SavefileName, "%s.sav", Title);
     ptr = fopen(SavefileName,"wb");  
     //AF BC DE HL SP PC
     //rombank srambank rammode ramenable
-    unsigned short Savedata[] = {registers.AF, registers.BC, registers.DE, registers.HL,
-                                registers.SP, registers.PC, lcd.control, lcd.status, lcd.SCX, lcd.SCY, lcd.LYC,
-                                lcd.WY, lcd.WX};
+    // unsigned short Savedata[] = {registers.AF, registers.BC, registers.DE, registers.HL,
+    //                             registers.SP, registers.PC, lcd.control, lcd.status, lcd.SCX, lcd.SCY, lcd.LYC,
+    //                             lcd.WY, lcd.WX};
                                 
-    fwrite(ROMBANKS, 0x8000, 1, ptr); //ill figure out how to displace it later
-    fwrite(VRAM, sizeof(VRAM), 1, ptr);
-    fwrite(SRAMBANKS, 0x2000, 1, ptr);
-    fwrite(WRAM, sizeof(WRAM), 1, ptr);
-    fwrite(WRAM, sizeof(WRAM) - 0x200, 1, ptr);
-    fwrite(OAM, sizeof(OAM), 1, ptr);
-    fwrite(unusablemem, sizeof(unusablemem), 1, ptr);
-    fwrite(IO, sizeof(IO), 1, ptr);
-    fwrite(HRAM, sizeof(HRAM), 1, ptr);
-    fwrite(Savedata, sizeof(Savedata), 1, ptr);
-    fwrite(&MBC1, 2, 1, ptr);
+    // fwrite(ROMBANKS, 0x8000, 1, ptr); //ill figure out how to displace it later
+    // fwrite(VRAM, sizeof(VRAM), 1, ptr);
+    fwrite(SRAMBANKS, 0x2000 * 4, 1, ptr);
+    // fwrite(WRAM, sizeof(WRAM), 1, ptr);
+    // fwrite(WRAM, sizeof(WRAM) - 0x200, 1, ptr);
+    // fwrite(OAM, sizeof(OAM), 1, ptr);
+    // fwrite(unusablemem, sizeof(unusablemem), 1, ptr);
+    // fwrite(IO, sizeof(IO), 1, ptr);
+    // fwrite(HRAM, sizeof(HRAM), 1, ptr);
+    // fwrite(Savedata, sizeof(Savedata), 1, ptr);
+    // fwrite(&MBC1, 2, 1, ptr);
 
     fclose(ptr);
 
@@ -167,43 +167,44 @@ void Save (void)
 
 void Load (void) 
 {
-
+    //autoloads on Rom load
     FILE *ptr;
     char SavefileName[20];
     sprintf(SavefileName, "%s.sav", Title);
     ptr = fopen(SavefileName,"rb");  
     
-    unsigned short Savedata[13];
+    // unsigned short Savedata[13];
                                 
-    fread(ROMBANKS, 0x8000, 1, ptr); //ill figure out how to displace it later
-    fread(VRAM, sizeof(VRAM), 1, ptr);
-    fread(SRAMBANKS, 0x2000, 1, ptr);
-    fread(WRAM, sizeof(WRAM), 1, ptr);
-    fread(WRAM, sizeof(WRAM) - 0x200, 1, ptr);
-    fread(OAM, sizeof(OAM), 1, ptr);
-    fread(unusablemem, sizeof(unusablemem), 1, ptr);
-    fread(IO, sizeof(IO), 1, ptr);
-    fread(HRAM, sizeof(HRAM), 1, ptr);
-    fread(Savedata, sizeof(Savedata), 1, ptr);
-    fread(&(MBC1), 2, 1, ptr);
+    // fread(ROMBANKS, 0x8000, 1, ptr); //ill figure out how to displace it later
+    // fread(VRAM, sizeof(VRAM), 1, ptr);
+    fread(SRAMBANKS, 0x2000 * 4, 1, ptr);
+    //registers.PC = 0x0100;
+    // fread(WRAM, sizeof(WRAM), 1, ptr);
+    // fread(WRAM, sizeof(WRAM) - 0x200, 1, ptr);
+    // fread(OAM, sizeof(OAM), 1, ptr);
+    // fread(unusablemem, sizeof(unusablemem), 1, ptr);
+    // fread(IO, sizeof(IO), 1, ptr);
+    // fread(HRAM, sizeof(HRAM), 1, ptr);
+    // fread(Savedata, sizeof(Savedata), 1, ptr);
+    // fread(&(MBC1), 2, 1, ptr);
 
-    registers.AF = Savedata[0];
-    registers.BC = Savedata[1];
-    registers.DE = Savedata[2];
-    registers.HL = Savedata[3];
-    registers.SP = Savedata[4];
-    registers.PC = Savedata[5];
-    // currentRomBank = Savedata[6];
-    // currentSRAMBank = Savedata[7];
-    // RAMMODE = Savedata[8];
-    // RAMENABLE = Savedata[9];
-    lcd.control = Savedata[6];
-    lcd.status = Savedata[7];
-    lcd.SCX = Savedata[8];
-    lcd.SCY = Savedata[9];
-    lcd.LYC = Savedata[10];
-    lcd.WY = Savedata[11];
-    lcd.WX = Savedata[12];
+    // registers.AF = Savedata[0];
+    // registers.BC = Savedata[1];
+    // registers.DE = Savedata[2];
+    // registers.HL = Savedata[3];
+    // registers.SP = Savedata[4];
+    // registers.PC = Savedata[5];
+    // // currentRomBank = Savedata[6];
+    // // currentSRAMBank = Savedata[7];
+    // // RAMMODE = Savedata[8];
+    // // RAMENABLE = Savedata[9];
+    // lcd.control = Savedata[6];
+    // lcd.status = Savedata[7];
+    // lcd.SCX = Savedata[8];
+    // lcd.SCY = Savedata[9];
+    // lcd.LYC = Savedata[10];
+    // lcd.WY = Savedata[11];
+    // lcd.WX = Savedata[12];
 
     fclose(ptr);
     

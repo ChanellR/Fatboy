@@ -291,8 +291,8 @@ void LoadSpriteLine (void)
         //Attributes
         int SpriteVMirror = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x40;
         int SpriteHMirror = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x20;
-        int SpritePallette = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x10;//non cgb
-        int SecondSpritePallette = ReadByte(OAMAddress + (Sprite + 1) * 4  + 3) & 0x10; //for second sprite in double length
+        int SpritePallette = (ReadByte(OAMAddress + Sprite * 4 + 3) & 0x10) >> 4;//non cgb
+        int SecondSpritePallette = (ReadByte(OAMAddress + (Sprite + 1) * 4  + 3) & 0x10) >> 4; //for second sprite in double length
 
         unsigned char byte1;
         unsigned char byte2;
@@ -311,7 +311,7 @@ void LoadSpriteLine (void)
 
         for (int pixel = 0; pixel < 8; pixel++)
         {   
-            if((lcd.LY - SpriteYpos) > 7) SpritePallette = SecondSpritePallette;
+            //if((lcd.LY - SpriteYpos) > 7) SpritePallette = SecondSpritePallette;
             if(SpriteXpos < 0) pixel += -1 * SpriteXpos;
 
             unsigned char bit1;
