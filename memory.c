@@ -34,12 +34,6 @@ unsigned char JoypadState;
 
 int DetectMBC (void) 
 {
-    
-    // MBC1: max 2MB ROM (125 banks) and/or up to 32KB RAM
-    // MBC2: max 256KB ROM (16 banks) and 512x4 bits RAM
-    // MBC3: max 2MB ROM (128 banks) and/or 32KB RAM (4 banks) and Timer
-    // MBC5: max 8MB ROM (512 banks) and/or 128KB RAM (16 banks)
-    // HuC1: Similar to MBC1 with an Infrared Controller
 
     //Pokemon, 64 banks 1MB, 4 bank RAM, 32KB
     //Only really care about compatibility with Zelda, and Pokemon, and non MBC

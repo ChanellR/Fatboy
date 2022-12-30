@@ -1,5 +1,5 @@
 
-gcc -Isrc/Include -Lsrc/lib -o Fatboy main.c cpu.c gpu.c memory.c -lSDL2main -lSDL2 -lcomdlg32 -lgdi32
+gcc -Isrc/Include -Lsrc/lib -o Fatboy main.c cpu.c ppu.c apu.c memory.c -lSDL2main -lSDL2 -lcomdlg32 -lgdi32
 PC: 00:4047 (C9 3E 01 EA)
 Notes:
     pass the loop by fixing LY  

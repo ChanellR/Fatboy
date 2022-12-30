@@ -202,7 +202,7 @@ void LoadSpritesOnScreen (void) {
         //Attributes
         int SpriteVMirror = ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x40;
         int SpriteHMirror = ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x20;
-        int SpritePallette = ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x03;
+        int SpritePallette = ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x10;
         //BG override
         SpritePallette = (ReadByte(0xFE00 + SpritetoLoad * 4 + 3) & 0x80) ? 2: SpritePallette;
 
@@ -291,8 +291,8 @@ void LoadSpriteLine (void)
         //Attributes
         int SpriteVMirror = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x40;
         int SpriteHMirror = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x20;
-        int SpritePallette = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x03;
-        int SecondSpritePallette = ReadByte(OAMAddress + (Sprite + 1) * 4  + 3) & 0x03; //for second sprite in double length
+        int SpritePallette = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x10;//non cgb
+        int SecondSpritePallette = ReadByte(OAMAddress + (Sprite + 1) * 4  + 3) & 0x10; //for second sprite in double length
 
         unsigned char byte1;
         unsigned char byte2;
