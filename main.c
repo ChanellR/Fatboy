@@ -8,6 +8,7 @@
 #include "memory.h"
 #include "control.h"
 #include "ppu.h"
+#include "apu.h"
 
 #include "src\include\SDL2\SDL_syswm.h"
 
@@ -74,7 +75,7 @@ void CreateMenuBar (HWND hwnd)
 
     AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_OPEN, L"&Open");
     AppendMenuW(hMenuFile, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_QUIT, L"&Quit");
+    AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_QUIT, L"&Save and Quit");
     AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_SAVE, L"&Save");
     AppendMenuW(hMenuFile, MF_STRING, IDM_FILE_LOAD, L"&Load");
 
@@ -113,8 +114,6 @@ void OpenDialog(HWND hwnd) {
     LoadRom(ofn.lpstrFile);
     Load();
     DetectMBC();
-    //LoadTilesFromMap();
-
   }
 
 }
@@ -178,7 +177,7 @@ int main(int argc, char** argv){
 
     HWND SpriteExplorerHandler;
 
-    SDL_Texture * SpriteExplorerTexture;
+    SDL_Texture *SpriteExplorerTexture;
     SDL_Renderer *SpriteExplorerrenderer;
 
     CreateMenuBar(WindowHandler);  
@@ -186,7 +185,7 @@ int main(int argc, char** argv){
     SDL_EventState(SDL_SYSWMEVENT, SDL_ENABLE);
     bool running = true;
 
-    
+    OpenAudio();
     
     while(running){
 

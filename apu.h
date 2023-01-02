@@ -6,9 +6,9 @@ struct Pulse_Channel
 		unsigned char NRx0; //sweep control
 		struct
 		{
-			int wavelengthSweepSlope : 3;
-			int wavelengthSweepSubtraction : 1;
-			int wavelengthSweepPace : 3;
+			unsigned char wavelengthSweepSlope : 3;
+			unsigned char wavelengthSweepSubtraction : 1;
+			unsigned char wavelengthSweepPace : 3;
 		};
 	};	
 
@@ -16,8 +16,8 @@ struct Pulse_Channel
 		unsigned char NRx1; //length timer and Duty Cycle
 		struct
 		{
-			int initialLengthTimer : 6;
-			int waveDuty : 2;
+			unsigned char initialLengthTimer : 6;
+			unsigned char waveDuty : 2;
 		};
 	};	
 
@@ -25,9 +25,9 @@ struct Pulse_Channel
 		unsigned char NRx2; //volume and envelope
 		struct
 		{
-			int volumeSweepPace : 3;
-			int volumeEnvelopeInc : 1;
-			int initialVolume : 4;
+			unsigned char volumeSweepPace : 3;
+			unsigned char volumeEnvelopeInc : 1;
+			unsigned char initialVolume : 4;
 		};
 	};	
 
@@ -37,22 +37,23 @@ struct Pulse_Channel
 		unsigned char NRx4; //wavelength high and contol
 		struct
 		{
-			int wavelengthHigh : 3;
-			int : 3;
-			int lengthEnable : 1;
-			int Trigger : 1;
+			unsigned char wavelengthHigh : 3;
+			unsigned char : 3;
+			unsigned char lengthEnable : 1;
+			unsigned char Trigger : 1;
 		};
 	};	
 
-	int currentLengthTimer : 6;
+	unsigned char currentLengthTimer : 6;
 	unsigned short wavelength;
     int frequency;
     unsigned char channelActive : 1;
-    int volume : 4;
+	unsigned char volume : 4;
+	unsigned char ticksTillSweep : 3;
 
 };
 
-
+void OpenAudio (void);
 void UpdateSoundChannels (int cycles);
-void UpdatePulse1 (int cycles);
-void TriggerChannel(int Channel);
+void UpdatePulseChannel (int cycles, struct Pulse_Channel *Channel);
+void TriggerChannel(int ChannelNum);

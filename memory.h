@@ -2,8 +2,7 @@
 
 
 extern unsigned char VRAM[0x2000]; //8000-9FFF
-extern unsigned char ROMBANKS[64 * 0x4000];
-extern int currentRomBank;
+// extern unsigned char ROMBANKS[64 * 0x4000];
 extern char Title[16];
 
 struct MBC1

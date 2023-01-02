@@ -326,7 +326,7 @@ int Outputinstructions (void){
 int CpuStep(void)
 {
 
-    unsigned char instruction = ReadByte(registers.PC++);
+    unsigned char instruction = ReadByte(registers.PC++);    
 
     switch (instructions[instruction].operand_length)
     {
@@ -342,6 +342,7 @@ int CpuStep(void)
         break;
     case -2:
         ((void (*)(unsigned char, unsigned char))instructions[instruction].function)(instruction, ReadByte(registers.PC++));
+        
         break;
     case -1:
         ((void (*)(unsigned char))instructions[instruction].function)(instruction);
@@ -1859,7 +1860,7 @@ void Update(void)
 
         UpdateGraphics(cycles);
         UpdateTiming(cycles);
-        //UpdateSoundChannels(cycles);
+        UpdateSoundChannels(cycles);
         HandleInterrupt();
         
         

@@ -1,6 +1,6 @@
 #include <SDL2/SDL.h>
 #include <math.h>
-#include <stdio.h> // printf
+#include <stdio.h> 
 
 #include "header.h"
 #include "memory.h"
@@ -8,22 +8,28 @@
 #include "src\include\SDL2\SDL_syswm.h"
 
 #define FREQUENCY 48000
-#define CHUNKSIZE 4800
+#define CHUNKSIZE 512
 
 struct Pulse_Channel Pulse1;
-int frameCounter = 2048;
-unsigned char timerFrame = 0; 
+struct Pulse_Channel Pulse2;
 
-void Pulse1_Callback (void* userdata, unsigned char* stream, int len);
+int frameCounter = 2048;
+int sampleCounter = 22;
+unsigned char timerFrame = 0; 
+unsigned char buffer[CHUNKSIZE];
+int bufferPointer = 0;
+int totalSamples = 0;
 
 SDL_AudioSpec Pulse1Spec = {
 .freq = FREQUENCY, //512HZ minimum frequency 
-.format = AUDIO_U8, // Signed 16 bit integer format
+.format = AUDIO_U8, 
 .channels = 1,
 .samples = CHUNKSIZE, // The size of each "chunk"
-.callback = Pulse1_Callback, // user-defined function that provides the audio data
+.callback = NULL, // user-defined function that provides the audio data
 .userdata = NULL // an argument to the callback function (we dont need any)
 };
+
+SDL_AudioDeviceID ID; 
 
 void ResetPulseWavelength (void)
 {
@@ -31,6 +37,12 @@ void ResetPulseWavelength (void)
 	Pulse1.NRx4 = ReadByte(0xFF14);
 	Pulse1.wavelength = (Pulse1.wavelengthHigh << 8) | Pulse1.NRx3;
 	//amount of times it goes trough an 8 step waveform
+}
+
+void SetPulseWavelength (unsigned short newWavelength)
+{
+	Pulse1.NRx3 = Pulse1.wavelength & 0xFF;
+	Pulse1.wavelengthHigh = (Pulse1.wavelength & 0x0700) >> 8;
 }
 
 void SetPulsefrequency (void)
@@ -56,7 +68,7 @@ void ResetPulseVolume (void)
 	Pulse1.volume = Pulse1.initialVolume;
 }
 
-void ResetPulseChannel (void)
+void ResetPulse1Channel (void)
 {
 	Pulse1.NRx0 = ReadByte(0xFF10);
 	Pulse1.NRx1 = ReadByte(0xFF11);
@@ -66,59 +78,95 @@ void ResetPulseChannel (void)
 	Pulse1.currentLengthTimer = Pulse1.initialLengthTimer;
 	Pulse1.volume = Pulse1.initialVolume;
 	Pulse1.wavelength = (Pulse1.wavelengthHigh << 8) | Pulse1.NRx3;
+	Pulse1.ticksTillSweep = Pulse1.wavelengthSweepPace;
+}
+
+void ResetPulse2Channel (void)
+{
+	Pulse2.NRx0 = 0x00;
+	Pulse2.NRx1 = ReadByte(0xFF16);
+	Pulse2.NRx2 = ReadByte(0xFF17);
+	Pulse2.NRx3 = ReadByte(0xFF18);
+	Pulse2.NRx4 = ReadByte(0xFF19);
+	Pulse2.currentLengthTimer = Pulse2.initialLengthTimer;
+	Pulse2.volume = Pulse2.initialVolume;
+	Pulse2.wavelength = (Pulse2.wavelengthHigh << 8) | Pulse2.NRx3;
+	
 }
 
 void OpenAudio (void)
 {
-	ResetPulseChannel();
 
-	SDL_OpenAudio(&Pulse1Spec, NULL);
-	SDL_PauseAudio(0);
-	Pulse1.channelActive = 1;
+	ResetPulse1Channel();
+	ResetPulse2Channel();
+	ID = SDL_OpenAudioDevice(NULL, 0, &Pulse1Spec, NULL, 0);
+	SDL_PauseAudioDevice(ID, 0);
 
 }
 
-void CloseAudio (void)
+void CloseAudio (struct Pulse_Channel *Channel)
 {
-	SDL_CloseAudio();
-	Pulse1.channelActive = 0;
+	//SDL_CloseAudio();
+	// ResetPulseChannel();
+	Channel->channelActive = 0;
 }
 
-double tone(double hz, unsigned long time) 
+unsigned char GetChannel1Sample (void)
 {
-	return sin(time * hz * M_PI * 2 / FREQUENCY);
-}
-
-double square(double hz, unsigned long time) {
-	double sine = tone(hz, time);
-	return sine > 0.0 ? 1.0 : -1.0;
-}
-
-void Pulse1_Callback (void* userdata, unsigned char* stream, int len) 
-{
-	// SDL_memset(stream, Pulse1Spec.silence, len);
-	// return;
+	Pulse1.NRx3 = ReadByte(0xFF13);
+	Pulse1.NRx4 = ReadByte(0xFF14);
+	Pulse1.wavelength = (Pulse1.wavelengthHigh << 8) | Pulse1.NRx3;
 	SetPulsefrequency();
-	ResetWaveDuty();
+	//default waveform 
+	//22 cycles is how much time in a waveform
 
-	unsigned char WaveDuty [4] = {0x7F, 0x7E, 
-								0x78, 0x60};
+	return sin(Pulse1.frequency * totalSamples * 2 * M_PI / FREQUENCY) > 0 ? 0xFF : 0x00;
+}
+
+unsigned char GetChannel2Sample (void)
+{
+	Pulse2.NRx3 = ReadByte(0xFF18);
+	Pulse2.NRx4 = ReadByte(0xFF19);
+	Pulse2.wavelength = (Pulse2.wavelengthHigh << 8) | Pulse2.NRx3;
+	Pulse2.frequency = 131072/(2048 - Pulse2.wavelength);
+	//default waveform 
+	//22 cycles is how much time in a waveform
+	// printf("frequency: %i", Pulse2.frequency);
+	return sin(Pulse2.frequency * totalSamples * 2 * M_PI / FREQUENCY) > 0 ? 0xFF : 0x00;
+}
+
+void LoadSamples (void)
+{
+	unsigned char sample = 0;
+
+	if(Pulse1.channelActive)
+	{
+		sample += GetChannel1Sample() * (Pulse1.volume / 15.0f) / 2;
+	}
 	
-	unsigned char buffer[CHUNKSIZE];
-	//for a 64 Hz tone, we need to divide Chunksize by 6.4 and have 
-	//complete wavforms of that length
-	//CHUNKSIZE is 10HZ based
-	for(int i = 0; i < CHUNKSIZE; i++)
-	{  
-		// buffer[i] = (WaveDuty[Pulse1.waveDuty] & (0x80 >> (i/(CHUNKSIZE / Pulse1.frequency / (8 * 10))) )) ? 0xFF : 0x00;
-		buffer[i] = (WaveDuty[Pulse1.waveDuty] & (0x80 >> (i/(CHUNKSIZE / 8 / 25) ))) ? 0xFF : 0x00;
-
+	if(Pulse2.channelActive)
+	{
+		sample += GetChannel2Sample() * (Pulse2.volume / 15.0f) / 2;
 	}
 
-	SDL_memcpy(stream, buffer, len);	// SDL_memcpy(stream, buffer+buffer_pos, len*2);
+	buffer[bufferPointer] = sample;
+
+	bufferPointer++;
+	totalSamples++;
+	
+	if(bufferPointer == 512)
+	{
+		SDL_QueueAudio(ID, buffer, 512);
+		bufferPointer = 0;
+	}
+
+	if(totalSamples == 48000)
+	{
+		totalSamples = 0;
+	}
 }
 
-void UpdatePulse1 (int cycles)
+void UpdatePulseChannel (int cycles, struct Pulse_Channel *Channel)
 {	
 
 	//2048 Machine Cycles per Frame sequencer = 1 tick
@@ -127,42 +175,61 @@ void UpdatePulse1 (int cycles)
 	//4 ticks per wavelength sweep
 
 	frameCounter -= cycles;
-	if(frameCounter <= 0)
+	if(frameCounter <= 0 ) //wont work with 0
 	{
 		int overflow = frameCounter;
-		frameCounter = 4096;
+		frameCounter = 2048;
 		frameCounter += overflow;
 
 		timerFrame++;
 
 		if(timerFrame % 2 == 0)
 		{
-			if(Pulse1.lengthEnable) 
+
+			if(Channel->lengthEnable) 
 			{
-				Pulse1.currentLengthTimer--;
-				if(!Pulse1.currentLengthTimer) {CloseAudio(); return;}
+				// printf("length enabled\n");
+				Channel->currentLengthTimer--;
+				if(Channel->currentLengthTimer == 0) {CloseAudio(Channel); return;}
 			} 
 		}
 		
-		if(timerFrame % 4 == 0 && Pulse1.wavelengthSweepSlope)
+		ResetPulseWavelength();
+
+		if(timerFrame % 4 == 0 && Channel->wavelengthSweepSlope && (Channel == &Pulse1))
 		{
-			
-			if(Pulse1.wavelengthSweepPace)
-			{
-				if(Pulse1.wavelength == 0) {CloseAudio(); return;}
-				int Sign = (Pulse1.wavelengthSweepSubtraction) ? -1 : 1;
-				Pulse1.wavelength += Sign * (Pulse1.wavelength / pow(2, Pulse1.wavelengthSweepSlope));
-				if(Pulse1.wavelength > 2047) {CloseAudio(); return;}
+
+			if(Channel->wavelengthSweepPace != 0)
+			{		
+				Pulse1.ticksTillSweep--; //perhaps
+				if(Pulse1.ticksTillSweep == 0)
+				{
+					Pulse1.ticksTillSweep = Pulse1.wavelengthSweepPace;
+
+					int Sign = (Channel->wavelengthSweepSubtraction) ? -1 : 1;
+					Channel->wavelength += Sign * (Channel->wavelength / pow(2, Channel->wavelengthSweepSlope));
+					
+					// printf("Pulse1: %04X\n", Pulse1.wavelength);
+					SetPulseWavelength(Channel->wavelength);
+
+					if(Channel->wavelength > 2047) 
+					{
+						CloseAudio(Channel); 
+						return;
+					}
+				}		
 			}	
 		}
 		
 		if(timerFrame % 8 == 0)
 		{
-			if(Pulse1.volumeSweepPace)
+			if(Channel->volumeSweepPace)
 			{
 				//not specing pace yet
-				Pulse1.volume += (Pulse1.volumeEnvelopeInc) ? 1 : -1;
-				if(!Pulse1.volume && !Pulse1.volumeEnvelopeInc) {CloseAudio(); return;}
+				Channel->volume += (Channel->volumeEnvelopeInc) ? 1 : -1;
+				// printf("volume: %i\n", Channel->volume);
+				if(Channel->volume == 0 && Channel->volumeEnvelopeInc == 0) {CloseAudio(Channel); return;}
+				//Disable DAC
 			}			
 		}
 
@@ -170,9 +237,27 @@ void UpdatePulse1 (int cycles)
 
 }
 
-void TriggerChannel(int Channel)
+void TriggerChannel(int ChannelNum)
 {
-	//OpenAudio();
+	//printf("Trigger Channel %i\n", ChannelNum);
+
+	switch(ChannelNum) {	
+		case 1:
+			ResetPulse1Channel();
+			// printf("Pulse 1: %02X %02X %02X %02X %02X \n", Pulse1.NRx0, Pulse1.NRx1,
+			// Pulse1.NRx2, Pulse1.NRx3, Pulse1.NRx4);
+			// printf("Pulse 1: %02X %02X %02X %02X %02X \n", ReadByte(0xFF10), ReadByte(0xFF11), 
+			// ReadByte(0xFF12), ReadByte(0xFF13), ReadByte(0xFF14));
+			Pulse1.channelActive = 1;
+			break;
+		case 2:
+			ResetPulse2Channel();
+			// printf("Pulse 2: %02X %02X %02X %02X %02X \n", Pulse2.NRx0, Pulse2.NRx1,
+			// Pulse2.NRx2, Pulse2.NRx3, Pulse2.NRx4);
+			Pulse2.channelActive = 1;
+			break;
+	}
+
 }
 
 void UpdateSoundChannels (int cycles)
@@ -181,5 +266,19 @@ void UpdateSoundChannels (int cycles)
 	//4096 M-cycles per length increment
 
 	if(!(MasterRegister & 0x80)) return; //APU switch
-	if(Pulse1.channelActive) UpdatePulse1(cycles);
+
+	if(Pulse1.channelActive) UpdatePulseChannel(cycles, &Pulse1);
+	if(Pulse2.channelActive) UpdatePulseChannel(cycles, &Pulse2);
+
+	sampleCounter -= cycles;
+	if(sampleCounter <= 0)
+	{
+		int overflow = -1*sampleCounter;
+		sampleCounter = 22;
+		sampleCounter -= overflow;
+
+		LoadSamples();
+	}
+
+
 }

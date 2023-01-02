@@ -10,7 +10,7 @@
 
 #define CLOCKSPEED 4194304
 
-unsigned char ROMBANKS[64 * 0x4000]; //4000 - 7FFF
+unsigned char ROMBANKS[128 * 0x4000]; //4000 - 7FFF
 unsigned char VRAM[0x2000]; //8000-9FFF
 unsigned char SRAMBANKS[4 * 0x2000]; //A000-BFFF
 
@@ -40,13 +40,11 @@ int DetectMBC (void)
     //Zelda: MBC1 + RAM + Battery, Pokemon: MBC3 + RAM + Battery
     //Pokemon only has 64 banks, Zelda, 32
 
-    int CartNum = (ReadByte(0x0147));
-    switch(CartNum)
+    switch(ReadByte(0x0147))
     {
         case 0:
         case 8: case 9: //Ram and Ram + battery
             MBCmode = 0; //only ROM
-
             break;
         case 1:case 2:case 3:
             MBCmode = 1;
@@ -56,7 +54,7 @@ int DetectMBC (void)
             break; 
     }
     
-    printf("MBC: %i, ROM: %02X\n", MBCmode, ReadByte(0x0148));
+    printf("MBC: %i, ROMsize: %02X\n", MBCmode, ReadByte(0x0148));
 }
 
 void Reset(void)
@@ -71,7 +69,6 @@ void Reset(void)
 
     memset(&MBC1, 0, 2);
     memset(&MBC3, 0, 2);
-    // RomBankHi = RomBankLo = currentRomBank = currentSRAMBank = RAMMODE = RAMENABLE = 0;
 
     registers.A = 0x01;
     registers.F = 0xB0; // If the header checksum is $00, then the carry and half-carry flags are clear; otherwise, they are both set.
@@ -123,7 +120,7 @@ void Reset(void)
 
     lcd.control = 0x91;
     lcd.status = 0x85;
-    lcd.SCY = 0x00;
+    lcd.SCY = 0;
     lcd.SCX = 0;
     lcd.LYC = 0;
     lcd.WY = 0;
@@ -132,6 +129,7 @@ void Reset(void)
     WriteByte(0xFF47, 0xFC); 
     WriteByte(0xFF48, 0xFF);
     WriteByte(0xFF49, 0xFF);
+    //Pallette
 
    
 }
@@ -247,7 +245,7 @@ void LoadRom (char * Filename)
     // fread(ROMBANKS, 0x4000, numOfBanks - 1, f);
 
     
-    fread(ROMBANKS, 0x4000, 64, f);
+    fread(ROMBANKS, 0x4000, 128, f);
     printf("Completed Loading Rom: %s \n", Filename);
     LoadRomTitle();
     
@@ -261,9 +259,9 @@ int GetRomBank (int romSection)
     //romSection 0 = 0000h - 3FFFh
     //romSection 1 = 4000h - 7FFFh
     
-    if(MBCmode == 0) return (romSection == 0) ? 0 : 1;
+    //if(MBCmode == 0) return (romSection == 0) ? 0 : 1;
 
-    int output = 0;
+    int output = (romSection == 0) ? 0 : 1; //for MBCmode 0
 
     if(MBCmode == 1)
     {
@@ -355,7 +353,6 @@ unsigned char ReadByte (unsigned short Address)
         {
             if(MBC1.ramEnable == 0x0A)
             {
-                // printf("Enable: %02X, Rambank: %02X\n", MBC1.ramEnable, MBC1.ramBankNumber_UpperTwoRom);
                 if(MBC1.bankingMode == 0)
                 {
                     output = SRAMBANKS[Address - 0xA000]; //set to 0
@@ -402,63 +399,63 @@ unsigned char ReadByte (unsigned short Address)
     {
 
         switch(Address){ //IO
-        case 0xFF04:
-            output = timer.DIV;
-            break;
-        case 0xFF05:
-            output = timer.TIMA;
-            break;
-        case 0x0FF06:
-            output = timer.TMA;
-            break;
-        case 0xFF07: //tima stacking
-            output = timer.TAC;
-            break;
-        case 0xFF00:
+            case 0xFF04:
+                output = timer.DIV;
+                break;
+            case 0xFF05:
+                output = timer.TIMA;
+                break;
+            case 0x0FF06:
+                output = timer.TMA;
+                break;
+            case 0xFF07: //tima stacking
+                output = timer.TAC;
+                break;
+            case 0xFF00:
+                
+                if( !(joypad.keys & 0x10)) {//p14
+
+                    output =  ~(JoypadState & 0xF); 
+
+                } 
+
+                if( !(joypad.keys & 0x20))
+                {
+                    output =  ~((JoypadState & 0xF0)>>4);
+                }
             
-            if( !(joypad.keys & 0x10)) {//p14
-
-                output =  ~(JoypadState & 0xF); 
-
-            } 
-
-            if( !(joypad.keys & 0x20))
-            {
-                output =  ~((JoypadState & 0xF0)>>4);
-            }
-        
-            break;
-        case 0xFF0F: //IF
-            output = interrupt.flag;
-            // printf("Reading from IF, IF: %02X \n", interrupt.flag);
-            break;
-        case 0xFF40:
-            output = lcd.control;
-            break;
-        case 0xFF41:
-            output = lcd.status;
-            break;
-        case 0xFF42:
-            output = lcd.SCY;
-            break;
-        case 0xFF43:
-            output = lcd.SCX;
-            break;
-        case 0xFF44:
-            output = lcd.LY; //lcd.LY stubbing
-            break;
-        case 0xFF45:
-            output = lcd.LYC;
-            break;
-        case 0xFF4A:
-            output = lcd.WY;
-            break;
-        case 0xFF4B:
-            output = lcd.WX;
-            break;
-        default:
-            output = IO[Address-0xFF00];
-    }
+                break;
+            case 0xFF0F: //IF
+                output = interrupt.flag;
+                // printf("Reading from IF, IF: %02X \n", interrupt.flag);
+                break;
+            case 0xFF40:
+                output = lcd.control;
+                break;
+            case 0xFF41:
+                output = lcd.status;
+                break;
+            case 0xFF42:
+                output = lcd.SCY;
+                break;
+            case 0xFF43:
+                output = lcd.SCX;
+                break;
+            case 0xFF44:
+                output = lcd.LY; //lcd.LY stubbing
+                break;
+            case 0xFF45:
+                output = lcd.LYC;
+                break;
+            case 0xFF4A:
+                output = lcd.WY;
+                break;
+            case 0xFF4B:
+                output = lcd.WX;
+                break;
+            default:
+                output = IO[Address-0xFF00];
+        }
     }
     else if (Address >= 0xFF80 && Address <= 0xFFFF) 
     {
@@ -482,7 +479,7 @@ void WriteByte (unsigned short Address, unsigned char value)
     //currentRomBank = (MBCmode != 3) ? ((RomBankHi <<5) | (RomBankLo)) : currentRomBank;
 
     if (Address <= 0x1FFF)
-    { //RAM ENABLE
+    { 
 
         SetMBC(0, value);
 
@@ -551,7 +548,8 @@ void WriteByte (unsigned short Address, unsigned char value)
 
     } else if (Address >= 0xFE00 && Address <= 0xFE9F) 
     {
-        if((lcd.status & 0x03) < 2) OAM[Address - 0xFE00] = value;
+        //if((lcd.status & 0x03) < 2) OAM[Address - 0xFE00] = value;
+        OAM[Address - 0xFE00] = value;
 
     } else if (Address >= 0xFEA0 && Address <= 0xFEFF) 
     {
@@ -609,6 +607,7 @@ void WriteByte (unsigned short Address, unsigned char value)
             break;
         case 0xFF45:
             lcd.LYC = value;
+            break;
         case 0xFF46:
             DoDMATransfer(value);
             break;
@@ -621,7 +620,9 @@ void WriteByte (unsigned short Address, unsigned char value)
 
         default:
             IO[Address-0xFF00] = value;
-            // if(Address == 0xFF14 && ( value & 0x80 ) ) TriggerChannel(1);
+            if(Address == 0xFF14 && ( value & 0x80 ) ) TriggerChannel(1);
+            if(Address == 0xFF19 && ( value & 0x80 ) ) TriggerChannel(2);
+
     } 
 
     }
@@ -682,9 +683,11 @@ void DoDMATransfer(unsigned char Addr)
 {
     //see if there are timing issues, what exactly is happening during the opening
     //movie that makes it so scuffed for sprites. 
-
+    //FIXED, was leaking from lyc
+    
     cyclesRegained += 160; //160 machine cycles per DMA
     unsigned short address = Addr << 8 ; // source address is 0xXX00;
+
     for (int i = 0 ; i < 0xA0; i++)
     {
         WriteByte(0xFE00+i, ReadByte(address+i));
