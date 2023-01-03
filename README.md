@@ -1,7 +1,7 @@
 # Fatboy! 🙏🏾
 
 Fatboy was written for the purposes of learning about low-level programming, the C language and emulation in general for future projects.
-It took around a month and a half to complete, starting on 11/19/23 and releasing the first official version on 1/3/23.
+It took around a month and a half to complete, starting on 11/19/22 and releasing the first official version on 1/3/23.
 It utilizes SDL2 for visual and auditory output. A currently up to date release of the SDL2.dll is included.
 
 It was extremely difficult, but I learned about an abundance of Computer Enginnering topics: Compilation, Interpretation, Display Rendering, Digital Audio Processing,
