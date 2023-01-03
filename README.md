@@ -50,7 +50,7 @@ output:
 - [ ] Accurate Window Scrolling
 
 
-## Testing
+## Tests
 
 There is still work to be done in clearing up inaccuracies in my HALT opcode.
 
@@ -59,7 +59,7 @@ There is still work to be done in clearing up inaccuracies in my HALT opcode.
 ## Historic README file
 [Notes.md](/Notes.md)
 
-## Reference
+## References
 
 * [Pan Docs](https://gbdev.io/pandocs/About.html)
 * [http://www.codeslinger.co.uk/pages/projects/gameboy/beginning.html](http://www.codeslinger.co.uk/pages/projects/gameboy/beginning.html)
