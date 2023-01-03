@@ -28,6 +28,7 @@ int WindowWidth = 160 * 5;
 int WindowHeight = 144 * 5;
 int RomLoaded = 0;
 int triggered = 0;
+int MasterVolume = 80;
 
 HMENU hMenuView;
 
@@ -111,6 +112,7 @@ void OpenDialog(HWND hwnd) {
   {
     Reset();  
     remove("instructionLog.txt");
+    remove("audiolog.file");
     LoadRom(ofn.lpstrFile);
     Load();
     DetectMBC();
@@ -135,13 +137,14 @@ void DrawViewport (SDL_Renderer* renderer, SDL_Texture* texture)
 
 int main(int argc, char** argv){
 
-    int fps = 60;
-    int DesiredDelta = 1000 / fps;
+    double fps = 59.73;
+    double DesiredDelta = 1000 / fps;
     int Viewport = 0; //0: viewport, 1: map, 2: sprite sheet
     int ViewSpriteSheet = 1;
     
+    
     Reset();
-
+    
 
     if(SDL_Init(SDL_INIT_VIDEO) < 0){
         printf("Error: SDL failed to initialize\nSDL Error: '%s'\n", SDL_GetError());
@@ -388,13 +391,19 @@ int main(int argc, char** argv){
                                     break;
 
                                 case VK_OEM_PLUS:
-                                    fps += 10;
-                                    printf("frame limit: %d\n", fps);
+                                    // fps += 10;
+                                    // UpdateSampleRate(fps);
+                                    // printf("frame limit: %lf\n", fps);
+                                    if(MasterVolume < 100) MasterVolume += 5;
+                                    printf("Volume: %i%\n", MasterVolume);
                                     break;
                                 case VK_OEM_MINUS:
-                                    fps -= 10;
-                                    fps = (fps == 0) ? 10 : fps;
-                                    printf("frame limit: %d\n", fps);
+                                    // fps -= 10;
+                                    // fps = (fps == 0) ? 10 : fps;
+                                    // UpdateSampleRate(fps);
+                                    // printf("frame limit: %lf\n", fps);
+                                    if(MasterVolume > 0) MasterVolume -= 5;
+                                    printf("Volume: %i%\n", MasterVolume);
                                     break;
                             }
                             
@@ -479,8 +488,8 @@ int main(int argc, char** argv){
 
         int delta = SDL_GetTicks() - startLoop;
         DesiredDelta = 1000/fps;
-        if(delta < DesiredDelta) SDL_Delay(DesiredDelta - delta);
-
+        // if(delta < DesiredDelta) SDL_Delay(DesiredDelta - delta);
+        //using audio syncing, so speed up needs to be fixed
 
     }
 

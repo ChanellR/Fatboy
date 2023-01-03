@@ -580,7 +580,7 @@ void WriteByte (unsigned short Address, unsigned char value)
             int old_freq = timer.TAC & 0x3; //only update if new
             
             timer.TAC = value;
-            printf("TAC: %02X\n", timer.TAC);
+            // printf("TAC: %02X\n", timer.TAC);
             int new_freq = timer.TAC & 0x3;
             if (old_freq != new_freq) {timercounter = CLOCKSPEED / GetFrequency();}
             break;
@@ -620,8 +620,33 @@ void WriteByte (unsigned short Address, unsigned char value)
 
         default:
             IO[Address-0xFF00] = value;
-            if(Address == 0xFF14 && ( value & 0x80 ) ) TriggerChannel(1);
-            if(Address == 0xFF19 && ( value & 0x80 ) ) TriggerChannel(2);
+
+            if(Address == 0xFF14)
+            {
+                if (value & 0x80) TriggerChannel(1);
+                EnagagePulseLength(1);
+            }
+            else if(Address == 0xFF19)
+            {
+                if (value & 0x80) TriggerChannel(2);
+                EnagagePulseLength(2);
+            }
+            else if(Address == 0xFF1E)
+            {
+                if(value & 0x80) TriggerChannel(3);
+                EnagagePulseLength(3);
+            }
+            else if(Address == 0xFF23)
+            {
+                if(value & 0x80) TriggerChannel(4);
+                EnagagePulseLength(4);
+            }
+            else if(Address == 0xFF1A)
+            {
+                ResetWaveDAC();
+            }
+
+            
 
     } 
 
@@ -685,7 +710,7 @@ void DoDMATransfer(unsigned char Addr)
     //movie that makes it so scuffed for sprites. 
     //FIXED, was leaking from lyc
     
-    cyclesRegained += 160; //160 machine cycles per DMA
+    cyclesRegained += 160 * 4; //160 machine cycles per DMA
     unsigned short address = Addr << 8 ; // source address is 0xXX00;
 
     for (int i = 0 ; i < 0xA0; i++)

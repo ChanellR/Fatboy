@@ -46,7 +46,7 @@ void UpdateGraphics (int cycles) {
     SetLCDstatus();
 
     if(IsLcdOn()) {
-        ScanlineCounter -= (cycles * 4);
+        ScanlineCounter -= (cycles);
     } else {
         return;
     }
@@ -289,6 +289,7 @@ void LoadSpriteLine (void)
         //printf("Sprite#: %d, Y: %d, X: %d, ID: %02X\n", Sprite, SpriteYpos, SpriteXpos, SpriteID);
         
         //Attributes
+        int BGoverOBJ = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x80;
         int SpriteVMirror = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x40;
         int SpriteHMirror = ReadByte(OAMAddress + Sprite * 4 + 3) & 0x20;
         int SpritePallette = (ReadByte(OAMAddress + Sprite * 4 + 3) & 0x10) >> 4;//non cgb
@@ -336,6 +337,9 @@ void LoadSpriteLine (void)
             //00 means transparent, so no write
             if(bit1 || bit2){
 
+                //BG priority
+                if(BGoverOBJ && DisplayPixels[lcd.LY * 160 * 3 + SpriteXpos * 3 + pixel * 3] != 0xE0) continue;
+                
                 DisplayPixels[lcd.LY * 160 * 3 + SpriteXpos * 3 + pixel * 3] = colors[0];
                 DisplayPixels[lcd.LY * 160 * 3 + SpriteXpos * 3 + pixel * 3 + 1] = colors[1];
                 DisplayPixels[lcd.LY * 160 * 3 + SpriteXpos * 3 + pixel * 3 + 2] = colors[2];

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <SDL2/SDL.h>
 
 
 #include "header.h"
@@ -21,7 +22,7 @@ struct joypad joypad;
 int cyclesRegained; //regained after failed jmp
 unsigned long CyclesPast = 0;
 
-int timercounter = CLOCKSPEED / 1024; // set to mode 0
+int timercounter = CLOCKSPEED / 4096; // set to mode 0
 int dividercounter = 256;
 
 const struct Instruction instructions[256] = {
@@ -1846,21 +1847,24 @@ void Update(void)
 
     if(RomLoaded == 0) return;
 
-    const int MAXCYCLES = (69905 / 4); //M cycles per 1/60th of second
+    const int MAXCYCLES = (69905); //M cycles per 1/60th of second
     unsigned int currentcycles = 0;
 
     while (currentcycles < MAXCYCLES)
     {
-        int cycles = CpuStep();
+        int cycles = CpuStep() * 4;
 
-        cycles += cyclesRegained; //after failed jmp, resets
+        cycles += cyclesRegained * 4; //after failed jmp, resets
         cyclesRegained = 0;
 
         currentcycles += cycles;
 
         UpdateGraphics(cycles);
         UpdateTiming(cycles);
+
+
         UpdateSoundChannels(cycles);
+
         HandleInterrupt();
         
         
@@ -1876,7 +1880,7 @@ void UpdateTiming(int cycles)
     if (IsClockEnabled())
     {
 
-        timercounter -= (cycles * 4); // 4 * M = T states
+        timercounter -= (cycles); // 4 * M = T states
 
         if (timercounter <= 0)
         {
@@ -1909,7 +1913,7 @@ void UpdateTiming(int cycles)
 void UpdateDivider(int cycles)
 {
 
-    dividercounter -= (cycles * 4);
+    dividercounter -= (cycles);
 
     if (dividercounter <= 0)
     {

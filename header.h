@@ -1,6 +1,5 @@
 #pragma once
-#include <stdbool.h>
-//taken from CINOOP, good organization
+
 
 #define FLAG_ZERO (0x80)
 #define FLAG_N (0x40)
@@ -23,6 +22,8 @@ extern int ScanlineCounter;
 extern char CurrentRom[40];
 extern int RomLoaded;
 extern int cyclesRegained;
+extern int triggered;
+extern int MasterVolume;
 
 struct registers {
 

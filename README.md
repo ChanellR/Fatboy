@@ -1,27 +1,60 @@
-I've decided to develop a gameboy emulator in order to become more engaged in the subject of emulation and eventually move on to contributing to projects
-like Yuzu and Ryujinx. 
+# Fatboy
 
-There's not much now, but there is certainly a backbone for everything to come to fruition. 
-I've decided to write it in C in order to learn the language, as well as set myself up to work with C++ on other projects. 
+Fatboy was written for the purposes of learning about low-level programming and emulation in general for future projects.
+It was project that around a month and a half to complete, starting on 11/19/23 and releasing the first official version on 1/3/23.
+It Utilizes SDL2 for Visual and Auditory Output.
 
-As of Now, I have about half of the instruction set implemented. 
+![https://github.com/HFO4/gameboy.live/raw/master/doc/screenshot.png](https://github.com/HFO4/gameboy.live/raw/master/doc/screenshot.png)
 
-11/25/22
+## Installation
 
-I decided to rewrite my code after seeing some other types of implementations and have come to find it much easier to work in this format. 
-Even though I've done a majority of the work before, and I am often moving code, it still feels much easier to do what I want to do, and I'm
-glad I decided to shift things. 
+You can directly download the executable file from the [Release](https://github.com/HFO4/gameboy.live/releases) page, or build it from the source. Go Version 1.11 or higher is required. Run `go version` to check what the version currently installed is. On Debian based systems, the packages `libasound2-dev` and `libgl1-mesa-dev` must be installed.
 
-11/27/22
+```
+git clone https://github.com/HFO4/gameboy.live.git
+cd gameboy.live
+go build -o gbdotlive main.go
+```
 
-CINOOP's realtime debugger has taught me a lot about the importance of debuggers. It's very interesting to see how necessary it is to write
-code that tests your code. I've heard of debugging and tests that are much longer than individual pieces of code, and that developers mainly
-spend time testing code rather than running it. That may or may not be true but it's definitely conceivable. 
+## Controls
 
-12/12/22
+| Keyboard | Gameboy |
+| -------- | ------- |
+| <kbd>Enter</kbd>     | Start   |
+|<kbd>Backspace</kbd>  | Select  |
+| <kbd>↑</kbd>  | Up      |
+|  <kbd>↓</kbd> | Down    |
+|   <kbd>←</kbd> | Left    |
+|   <kbd>→</kbd>  | Right   |
+|    <kbd>X</kbd>  | A      |
+|     <kbd>Z</kbd>     | B      |
 
-After having finally passed all of Blargg's cpu instruction tests, I realized how beneficial it would've been for me to put effort into finding out how to work them in the beginning and use them to track  my progress. When I finished my cpu implementation without testing and moved on to unsuccessfully implementing the PPU, it made me really discouraged because I felt as though I would never get it to work. Having this structure, something that can empirically track my progress has done wonders for me. 
+## Features & TODOs
 
-12/17/22
+- [x] CPU instruction emulation
+- [x] Timer and interrupt
+- [x] Support for ROM-only, MBC1, MBC2, MBC3 cartridge
+- [x] Sound emulation
+- [x] Graphics emulation
+- [x] Cloud gaming
+- [x] ROM debugger
+- [x] Game saving & restore in cartridge level
 
-Tetris and Dr. Mario is now completely playable. I need to do sound and fix timing issues along with work out some visual glitches but everything is alright, because at last you can play the game. 
+There are still many TODOs：
+
+- [ ] Support Gameboy Color emulation
+
+
+## Testing
+
+![Testing result](https://github.com/HFO4/gameboy.live/raw/master/doc/Testing.jpg)
+
+## Reference
+
+* [Pan Docs](http://bgb.bircd.org/pandocs.htm)
+* [http://www.codeslinger.co.uk/pages/projects/gameboy/beginning.html](http://www.codeslinger.co.uk/pages/projects/gameboy/beginning.html)
+* [http://www.devrs.com/gb/files/GBCPU_Instr.html](http://www.devrs.com/gb/files/GBCPU_Instr.html)
+* [https://github.com/Humpheh/goboy](https://github.com/Humpheh/goboy)
+* [The Ultimate Game Boy Talk (33c3)](https://www.youtube.com/watch?v=HyzD8pNlpwI)
+* [http://gameboy.mongenel.com/dmg/asmmemmap.html](http://gameboy.mongenel.com/dmg/asmmemmap.html)
+* ......
