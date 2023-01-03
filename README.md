@@ -44,6 +44,7 @@ output:
 - [x] Audio emulation
 - [x] BG & OBJ Scanline Renderer
 - [x] Spritesheet, OAM, and TileMap display in View Tab
+- [x] Saving and File IO
 - [ ] Accurate Sprite Priority Rendering
 - [ ] Accurate Instruction Timing 
 - [ ] Accurate Window Scrolling
