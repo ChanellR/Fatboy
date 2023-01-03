@@ -10,7 +10,7 @@
 #include "ppu.h"
 #include "apu.h"
 
-#include "src\include\SDL2\SDL_syswm.h"
+#include "..\SDL2\include\SDL2\SDL_syswm.h"
 
 #define WM_MESSAGE(x) (x.syswm.msg->msg.win)
 

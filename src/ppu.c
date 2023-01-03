@@ -404,7 +404,7 @@ void LoadOAM (void) {
     for (int SpritetoLoad = 0; SpritetoLoad < 40; SpritetoLoad++) 
     {
         //sprite should be spaced 
-        int SpritePixelOffset =  8 * 3 + 256 * 3 * 10 + ( (SpritetoLoad / 4) * 256 * 15 + (SpritetoLoad % 4) * 20) * 3;
+        int SpritePixelOffset =  10 * 3 + 256 * 3 * 10 + ( (SpritetoLoad / 4) * 256 * 15 + (SpritetoLoad % 4) * 45) * 3;
         int offset = ReadByte(0xFE00 + SpritetoLoad * 4 + 2);
         unsigned short SpriteDataAddress = DataAddress + (offset * 16);
         
