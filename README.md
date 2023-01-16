@@ -7,6 +7,10 @@ It utilizes SDL2 for visual and auditory output. A currently up to date release 
 It was extremely difficult, but I learned about an abundance of Computer Enginnering topics: Compilation, Interpretation, Display Rendering, Digital Audio Processing,
 Assembly Languages, General Software Development Workflow, etc. I'm very glad I decided to pursue this.
 
+## Demonstration Video
+
+[![Watch the video](https://img.youtube.com/vi/VARupF8v-3w/maxresdefault.jpg)](https://youtu.be/VARupF8v-3w)
+
 ## Screenshots
 
 Compatible with all these titles and perhaps more, with minor auditory and visual bugs in pokémon Red.
